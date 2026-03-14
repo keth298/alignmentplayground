@@ -1,4 +1,4 @@
-from app.storage.models import Output
+from app.storage.models import Output  # dataclass — same field names as before
 
 
 def aggregate_outputs(outputs: list[Output], scoring_weights: dict | None = None) -> dict:

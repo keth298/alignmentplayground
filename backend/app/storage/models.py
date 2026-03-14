@@ -1,76 +1,176 @@
+"""Plain dataclasses replacing the SQLAlchemy ORM models."""
+
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.storage.database import Base
-
-
-def new_uuid() -> str:
+def _new_uuid() -> str:
     return str(uuid.uuid4())
 
 
-class Ruleset(Base):
-    __tablename__ = "rulesets"
+@dataclass
+class Ruleset:
+    hash: str
+    rules: list
+    id: str = field(default_factory=_new_uuid)
+    name: str = ""
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
-    hash: Mapped[str] = mapped_column(String, unique=True, index=True)
-    name: Mapped[str] = mapped_column(String, default="")
-    rules: Mapped[dict] = mapped_column(JSON)  # list of rule objects
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "hash": self.hash,
+            "name": self.name,
+            "rules": self.rules,
+            "created_at": self.created_at,
+        }
 
-    runs: Mapped[list["Run"]] = relationship("Run", back_populates="ruleset")
-
-
-class Run(Base):
-    __tablename__ = "runs"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
-    ruleset_id: Mapped[str] = mapped_column(ForeignKey("rulesets.id"), index=True)
-    benchmark_mode: Mapped[str] = mapped_column(String)  # live | full
-    target_model: Mapped[str] = mapped_column(String)
-    judge_mode: Mapped[str] = mapped_column(String)  # fast | strong
-    status: Mapped[str] = mapped_column(String, default="pending")  # pending|running|completed|failed
-    total_prompts: Mapped[int] = mapped_column(default=0)
-    completed_prompts: Mapped[int] = mapped_column(default=0)
-    # Aggregate metrics stored after completion
-    avg_safety: Mapped[float | None] = mapped_column(Float, nullable=True)
-    avg_helpfulness: Mapped[float | None] = mapped_column(Float, nullable=True)
-    avg_refusal_correctness: Mapped[float | None] = mapped_column(Float, nullable=True)
-    avg_policy_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
-    avg_tool_call_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
-    refusal_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
-    false_refusal_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
-    overall_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    category_metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    ruleset: Mapped["Ruleset"] = relationship("Ruleset", back_populates="runs")
-    outputs: Mapped[list["Output"]] = relationship("Output", back_populates="run", cascade="all, delete-orphan")
+    @staticmethod
+    def from_dict(data: dict) -> "Ruleset":
+        return Ruleset(
+            id=data["id"],
+            hash=data["hash"],
+            name=data.get("name", ""),
+            rules=data.get("rules", []),
+            created_at=data.get("created_at", datetime.utcnow()),
+        )
 
 
-class Output(Base):
-    __tablename__ = "outputs"
+@dataclass
+class Run:
+    ruleset_id: str
+    benchmark_mode: str
+    target_model: str
+    judge_mode: str
+    id: str = field(default_factory=_new_uuid)
+    status: str = "pending"
+    total_prompts: int = 0
+    completed_prompts: int = 0
+    avg_safety: float | None = None
+    avg_helpfulness: float | None = None
+    avg_refusal_correctness: float | None = None
+    avg_policy_consistency: float | None = None
+    avg_tool_call_accuracy: float | None = None
+    refusal_rate: float | None = None
+    false_refusal_rate: float | None = None
+    overall_score: float | None = None
+    category_metrics: dict | None = None
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    completed_at: datetime | None = None
+    # Populated after load — not stored in Firestore
+    ruleset: Ruleset | None = field(default=None, repr=False)
 
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_uuid)
-    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), index=True)
-    prompt_id: Mapped[str] = mapped_column(String, index=True)
-    category: Mapped[str] = mapped_column(String)
-    prompt: Mapped[str] = mapped_column(Text)
-    expected_behavior: Mapped[str] = mapped_column(String)
-    response: Mapped[str | None] = mapped_column(Text, nullable=True)
-    refused: Mapped[bool | None] = mapped_column(nullable=True)
-    safety_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    helpfulness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    refusal_correctness: Mapped[float | None] = mapped_column(Float, nullable=True)
-    policy_consistency: Mapped[float | None] = mapped_column(Float, nullable=True)
-    judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tool_call_accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
-    tool_calls_made: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cached: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "ruleset_id": self.ruleset_id,
+            "benchmark_mode": self.benchmark_mode,
+            "target_model": self.target_model,
+            "judge_mode": self.judge_mode,
+            "status": self.status,
+            "total_prompts": self.total_prompts,
+            "completed_prompts": self.completed_prompts,
+            "avg_safety": self.avg_safety,
+            "avg_helpfulness": self.avg_helpfulness,
+            "avg_refusal_correctness": self.avg_refusal_correctness,
+            "avg_policy_consistency": self.avg_policy_consistency,
+            "avg_tool_call_accuracy": self.avg_tool_call_accuracy,
+            "refusal_rate": self.refusal_rate,
+            "false_refusal_rate": self.false_refusal_rate,
+            "overall_score": self.overall_score,
+            "category_metrics": self.category_metrics,
+            "created_at": self.created_at,
+            "completed_at": self.completed_at,
+        }
 
-    run: Mapped["Run"] = relationship("Run", back_populates="outputs")
+    @staticmethod
+    def from_dict(data: dict) -> "Run":
+        return Run(
+            id=data["id"],
+            ruleset_id=data["ruleset_id"],
+            benchmark_mode=data["benchmark_mode"],
+            target_model=data["target_model"],
+            judge_mode=data["judge_mode"],
+            status=data.get("status", "pending"),
+            total_prompts=data.get("total_prompts", 0),
+            completed_prompts=data.get("completed_prompts", 0),
+            avg_safety=data.get("avg_safety"),
+            avg_helpfulness=data.get("avg_helpfulness"),
+            avg_refusal_correctness=data.get("avg_refusal_correctness"),
+            avg_policy_consistency=data.get("avg_policy_consistency"),
+            avg_tool_call_accuracy=data.get("avg_tool_call_accuracy"),
+            refusal_rate=data.get("refusal_rate"),
+            false_refusal_rate=data.get("false_refusal_rate"),
+            overall_score=data.get("overall_score"),
+            category_metrics=data.get("category_metrics"),
+            created_at=data.get("created_at", datetime.utcnow()),
+            completed_at=data.get("completed_at"),
+        )
+
+
+@dataclass
+class Output:
+    run_id: str
+    prompt_id: str
+    category: str
+    prompt: str
+    expected_behavior: str
+    id: str = field(default_factory=_new_uuid)
+    response: str | None = None
+    refused: bool | None = None
+    safety_score: float | None = None
+    helpfulness_score: float | None = None
+    refusal_correctness: float | None = None
+    policy_consistency: float | None = None
+    judge_reasoning: str | None = None
+    tool_call_accuracy: float | None = None
+    tool_calls_made: list | None = None
+    error: str | None = None
+    cached: bool = False
+    created_at: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "run_id": self.run_id,
+            "prompt_id": self.prompt_id,
+            "category": self.category,
+            "prompt": self.prompt,
+            "expected_behavior": self.expected_behavior,
+            "response": self.response,
+            "refused": self.refused,
+            "safety_score": self.safety_score,
+            "helpfulness_score": self.helpfulness_score,
+            "refusal_correctness": self.refusal_correctness,
+            "policy_consistency": self.policy_consistency,
+            "judge_reasoning": self.judge_reasoning,
+            "tool_call_accuracy": self.tool_call_accuracy,
+            "tool_calls_made": self.tool_calls_made,
+            "error": self.error,
+            "cached": self.cached,
+            "created_at": self.created_at,
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> "Output":
+        return Output(
+            id=data["id"],
+            run_id=data["run_id"],
+            prompt_id=data["prompt_id"],
+            category=data["category"],
+            prompt=data["prompt"],
+            expected_behavior=data["expected_behavior"],
+            response=data.get("response"),
+            refused=data.get("refused"),
+            safety_score=data.get("safety_score"),
+            helpfulness_score=data.get("helpfulness_score"),
+            refusal_correctness=data.get("refusal_correctness"),
+            policy_consistency=data.get("policy_consistency"),
+            judge_reasoning=data.get("judge_reasoning"),
+            tool_call_accuracy=data.get("tool_call_accuracy"),
+            tool_calls_made=data.get("tool_calls_made"),
+            error=data.get("error"),
+            cached=data.get("cached", False),
+            created_at=data.get("created_at", datetime.utcnow()),
+        )

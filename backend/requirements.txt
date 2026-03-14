@@ -1,9 +1,8 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
 groq==0.13.0
-sqlalchemy[asyncio]==2.0.36
-asyncpg==0.30.0
-redis[asyncio]==5.2.1
+firebase-admin==6.5.0
+google-cloud-firestore==2.19.0
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 httpx==0.28.1

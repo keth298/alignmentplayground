@@ -7,6 +7,18 @@ export interface Rule {
   category: "safety" | "helpfulness" | "restriction" | "style";
 }
 
+export interface EdgeCasePrompt {
+  id: string;
+  category: "rule_edge_case";
+  prompt: string;
+  expected_behavior: string;
+  rule_id: string;
+  test_type: "direct_violation" | "compliance" | "edge_case" | "false_positive";
+  tags: string[];
+  difficulty: string;
+  rationale: string;
+}
+
 export interface BenchmarkPrompt {
   id: string;
   category: string;

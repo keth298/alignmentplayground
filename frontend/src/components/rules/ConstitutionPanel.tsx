@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import type { Rule } from "@/lib/types";
 import { CategoryBadge } from "@/components/common/Badge";
+import { api } from "@/lib/api";
 
 const CATEGORIES: Rule["category"][] = ["safety", "helpfulness", "restriction", "style"];
 
@@ -52,13 +53,29 @@ function RuleEditForm({ rule, onSave, onCancel }: { rule: Rule; onSave: (patch: 
   );
 }
 
-function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled }: {
+function EdgeCaseBadge({ count, generating }: { count: number | null; generating: boolean }) {
+  if (generating) return (
+    <span style={{ fontSize: 9, color: "#f59e0b", background: "#f59e0b18", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+      generating…
+    </span>
+  );
+  if (count == null || count === 0) return null;
+  return (
+    <span title={`${count} edge case prompts generated for this rule`} style={{ fontSize: 9, color: "#06b6d4", background: "#06b6d418", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+      {count} edge cases
+    </span>
+  );
+}
+
+function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled, edgeCaseCount, generating }: {
   rule: Rule;
   onToggle: (id: string) => void;
   onWeightChange: (id: string, w: number) => void;
   onDelete: (id: string) => void;
   onEdit: (id: string, patch: Partial<Rule>) => void;
   disabled: boolean;
+  edgeCaseCount: number | null;
+  generating: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   return (
@@ -90,6 +107,7 @@ function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled }
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{rule.label}</span>
             <CategoryBadge category={rule.category} />
+            <EdgeCaseBadge count={edgeCaseCount} generating={generating} />
           </div>
           <p style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>{rule.description}</p>
           {rule.enabled && !editing && (
@@ -177,12 +195,28 @@ interface Props {
 export default function ConstitutionPanel({ rules, onChange, systemPrompt, disabled }: Props) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+  const [edgeCaseCounts, setEdgeCaseCounts] = useState<Record<string, number>>({});
 
   const toggle = (id: string) => onChange(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
   const setWeight = (id: string, w: number) => onChange(rules.map(r => r.id === id ? { ...r, weight: w } : r));
   const deleteRule = (id: string) => onChange(rules.filter(r => r.id !== id));
   const editRule = (id: string, patch: Partial<Rule>) => onChange(rules.map(r => r.id === id ? { ...r, ...patch } : r));
-  const addRule = (rule: Rule) => { onChange([...rules, rule]); setAdding(false); };
+
+  const addRule = (rule: Rule) => {
+    onChange([...rules, rule]);
+    setAdding(false);
+    // Auto-generate edge cases for this new rule
+    setGeneratingIds(prev => new Set(prev).add(rule.id));
+    api.generateEdgeCases(rule.id, rule.label, rule.description)
+      .then(res => {
+        setEdgeCaseCounts(prev => ({ ...prev, [rule.id]: res.count }));
+      })
+      .catch(() => {/* silent fail — badge just won't show */})
+      .finally(() => {
+        setGeneratingIds(prev => { const next = new Set(prev); next.delete(rule.id); return next; });
+      });
+  };
 
   const activeCount = rules.filter(r => r.enabled).length;
 
@@ -205,7 +239,9 @@ export default function ConstitutionPanel({ rules, onChange, systemPrompt, disab
         {rules.map(rule => (
           <RuleCard key={rule.id} rule={rule}
             onToggle={toggle} onWeightChange={setWeight}
-            onDelete={deleteRule} onEdit={editRule} disabled={disabled} />
+            onDelete={deleteRule} onEdit={editRule} disabled={disabled}
+            edgeCaseCount={edgeCaseCounts[rule.id] ?? null}
+            generating={generatingIds.has(rule.id)} />
         ))}
         {!disabled && !adding && (
           <button onClick={() => setAdding(true)} style={{

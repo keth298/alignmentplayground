@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.storage.database import get_db
 from app.storage.repositories.run_repository import get_run, get_run_outputs
 
 router = APIRouter()
@@ -14,17 +12,16 @@ class CompareRequest(BaseModel):
 
 
 @router.post("")
-async def compare_runs(req: CompareRequest, db: AsyncSession = Depends(get_db)):
-    run_a = await get_run(db, req.run_id_a)
-    run_b = await get_run(db, req.run_id_b)
+async def compare_runs(req: CompareRequest):
+    run_a = await get_run(req.run_id_a)
+    run_b = await get_run(req.run_id_b)
 
     if not run_a or not run_b:
         raise HTTPException(status_code=404, detail="One or both runs not found")
 
-    outputs_a = await get_run_outputs(db, req.run_id_a)
-    outputs_b = await get_run_outputs(db, req.run_id_b)
+    outputs_a = await get_run_outputs(req.run_id_a)
+    outputs_b = await get_run_outputs(req.run_id_b)
 
-    # Build prompt-level comparison
     map_b = {o.prompt_id: o for o in outputs_b}
     diffs = []
     for oa in outputs_a:

@@ -1,30 +1,25 @@
-import json
+"""In-memory cache replacing Redis. TTL-based, process-local."""
 
-import redis.asyncio as aioredis
+import time
 
 from app.config import settings
 
-_redis: aioredis.Redis | None = None
-
-
-def get_redis() -> aioredis.Redis:
-    global _redis
-    if _redis is None:
-        _redis = aioredis.from_url(settings.redis_url, decode_responses=True)
-    return _redis
+_cache: dict[str, tuple[dict, float]] = {}
 
 
 async def cache_get(key: str) -> dict | None:
-    r = get_redis()
-    val = await r.get(key)
-    if val:
-        return json.loads(val)
-    return None
+    entry = _cache.get(key)
+    if entry is None:
+        return None
+    value, expires_at = entry
+    if time.monotonic() > expires_at:
+        del _cache[key]
+        return None
+    return value
 
 
 async def cache_set(key: str, value: dict, ttl: int = settings.cache_ttl) -> None:
-    r = get_redis()
-    await r.set(key, json.dumps(value), ex=ttl)
+    _cache[key] = (value, time.monotonic() + ttl)
 
 
 def model_output_key(model: str, ruleset_hash: str, prompt_id: str) -> str:

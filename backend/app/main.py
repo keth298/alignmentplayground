@@ -4,12 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import benchmarks, compare, health, rules, runs
-from app.storage.database import init_db
+from app.storage.database import init_firebase
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    init_firebase()
     yield
 
 

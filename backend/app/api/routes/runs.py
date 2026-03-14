@@ -1,15 +1,13 @@
 import asyncio
 import json
-from typing import AsyncGenerator
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import AsyncGenerator
 
 from app.config import settings
 from app.core.run_orchestrator import create_and_start_run
-from app.storage.database import get_db
 from app.storage.repositories.run_repository import (
     get_run,
     get_run_outputs,
@@ -77,10 +75,9 @@ def _serialize_output(o) -> dict:
 
 
 @router.post("")
-async def create_run(req: RunRequest, db: AsyncSession = Depends(get_db)):
+async def create_run_endpoint(req: RunRequest):
     model = req.target_model or settings.target_model
     run_id = await create_and_start_run(
-        db=db,
         rules=req.rules,
         benchmark_mode=req.benchmark_mode,
         target_model=model,
@@ -90,68 +87,64 @@ async def create_run(req: RunRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("")
-async def list_all_runs(db: AsyncSession = Depends(get_db)):
-    runs = await list_runs(db)
+async def list_all_runs():
+    runs = await list_runs()
     return [_serialize_run(r) for r in runs]
 
 
 @router.get("/{run_id}")
-async def get_run_detail(run_id: str, db: AsyncSession = Depends(get_db)):
-    run = await get_run(db, run_id)
+async def get_run_detail(run_id: str):
+    run = await get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return _serialize_run(run)
 
 
 @router.get("/{run_id}/outputs")
-async def get_outputs(run_id: str, db: AsyncSession = Depends(get_db)):
-    run = await get_run(db, run_id)
+async def get_outputs(run_id: str):
+    run = await get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    outputs = await get_run_outputs(db, run_id)
+    outputs = await get_run_outputs(run_id)
     return [_serialize_output(o) for o in outputs]
 
 
 @router.get("/{run_id}/stream")
-async def stream_run(run_id: str, db: AsyncSession = Depends(get_db)):
+async def stream_run(run_id: str):
     """Server-sent events stream for real-time run progress."""
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        from app.storage.database import AsyncSessionLocal
-        from app.storage.repositories.run_repository import get_run, get_run_outputs
-
         last_completed = -1
         while True:
-            async with AsyncSessionLocal() as session:
-                run = await get_run(session, run_id)
-                if not run:
-                    yield f"data: {json.dumps({'error': 'run not found'})}\n\n"
-                    break
+            run = await get_run(run_id)
+            if not run:
+                yield f"data: {json.dumps({'error': 'run not found'})}\n\n"
+                break
 
-                if run.completed_prompts != last_completed or run.status in ("completed", "failed"):
-                    outputs = await get_run_outputs(session, run_id)
-                    payload = {
-                        "status": run.status,
-                        "total_prompts": run.total_prompts,
-                        "completed_prompts": run.completed_prompts,
-                        "outputs": [_serialize_output(o) for o in outputs],
-                        "metrics": {
-                            "avg_safety": run.avg_safety,
-                            "avg_helpfulness": run.avg_helpfulness,
-                            "avg_refusal_correctness": run.avg_refusal_correctness,
-                            "avg_policy_consistency": run.avg_policy_consistency,
-                            "avg_tool_call_accuracy": run.avg_tool_call_accuracy,
-                            "refusal_rate": run.refusal_rate,
-                            "false_refusal_rate": run.false_refusal_rate,
-                            "overall_score": run.overall_score,
-                            "category_metrics": run.category_metrics,
-                        } if run.status == "completed" else None,
-                    }
-                    yield f"data: {json.dumps(payload)}\n\n"
-                    last_completed = run.completed_prompts
+            if run.completed_prompts != last_completed or run.status in ("completed", "failed"):
+                outputs = await get_run_outputs(run_id)
+                payload = {
+                    "status": run.status,
+                    "total_prompts": run.total_prompts,
+                    "completed_prompts": run.completed_prompts,
+                    "outputs": [_serialize_output(o) for o in outputs],
+                    "metrics": {
+                        "avg_safety": run.avg_safety,
+                        "avg_helpfulness": run.avg_helpfulness,
+                        "avg_refusal_correctness": run.avg_refusal_correctness,
+                        "avg_policy_consistency": run.avg_policy_consistency,
+                        "avg_tool_call_accuracy": run.avg_tool_call_accuracy,
+                        "refusal_rate": run.refusal_rate,
+                        "false_refusal_rate": run.false_refusal_rate,
+                        "overall_score": run.overall_score,
+                        "category_metrics": run.category_metrics,
+                    } if run.status == "completed" else None,
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                last_completed = run.completed_prompts
 
-                if run.status in ("completed", "failed"):
-                    break
+            if run.status in ("completed", "failed"):
+                break
 
             await asyncio.sleep(1)
 

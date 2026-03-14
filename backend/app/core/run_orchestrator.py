@@ -2,10 +2,9 @@ import asyncio
 import logging
 from datetime import datetime
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.benchmarks.loaders import get_prompts
 from app.config import settings
+from app.core.edge_case_generator import get_edge_cases_for_rules
 from app.core.metrics_aggregator import aggregate_outputs
 from app.core.prompt_builder import build_system_prompt, hash_ruleset
 from app.models.claude_client import complete, complete_with_tools
@@ -13,7 +12,6 @@ from app.models.tools import TOOLS
 from app.scoring.judge_runner import score_response
 from app.scoring.tool_call_scorer import TOOL_CALL_BEHAVIORS, score_tool_call
 from app.storage.cache import cache_get, cache_set, model_output_key
-from app.storage.database import AsyncSessionLocal
 from app.storage.models import Output
 from app.storage.repositories.run_repository import (
     create_run,
@@ -87,14 +85,12 @@ async def _run_single_prompt(
         )
         output.tool_call_accuracy = tool_scores["tool_call_accuracy"]
         output.judge_reasoning = tool_scores["reasoning"]
-        # Map refuse_tool_call → "refuse" for regular judge scoring
         judge_expected = (
             "refuse" if prompt_data["expected_behavior"] == "refuse_tool_call" else "helpful"
         )
     else:
         judge_expected = prompt_data["expected_behavior"]
 
-    # Score with judge (applies to all prompts)
     try:
         scores = await score_response(
             prompt=prompt_data["prompt"],
@@ -118,8 +114,13 @@ async def _run_single_prompt(
 
 
 async def execute_run(run_id: str, rules: list[dict], benchmark_mode: str, target_model: str) -> None:
-    """Background task: runs all benchmark prompts and saves results to DB."""
+    """Background task: runs all benchmark prompts and saves results to Firestore."""
     prompts = get_prompts(benchmark_mode)
+
+    # Include edge case prompts for all enabled rules
+    active_rule_ids = [r["id"] for r in rules if r.get("enabled", True)]
+    edge_case_prompts = await get_edge_cases_for_rules(active_rule_ids)
+    prompts = prompts + edge_case_prompts
     system_prompt = build_system_prompt(rules)
     ruleset_hash = hash_ruleset(rules)
     rules_summary = "; ".join(
@@ -132,65 +133,56 @@ async def execute_run(run_id: str, rules: list[dict], benchmark_mode: str, targe
         async with semaphore:
             return await _run_single_prompt(p, system_prompt, ruleset_hash, rules_summary, run_id, target_model)
 
-    async with AsyncSessionLocal() as db:
-        await update_run_status(db, run_id, "running")
-        await db.commit()
+    await update_run_status(run_id, "running")
 
     completed = 0
     tasks = [bounded_run(p) for p in prompts]
 
-    async with AsyncSessionLocal() as db:
-        for coro in asyncio.as_completed(tasks):
-            output = await coro
-            await save_output(db, output)
-            completed += 1
-            await update_run_status(db, run_id, "running", completed_prompts=completed)
-            await db.commit()
+    for coro in asyncio.as_completed(tasks):
+        output = await coro
+        await save_output(output)
+        completed += 1
+        await update_run_status(run_id, "running", completed_prompts=completed)
 
     # Final metrics
-    async with AsyncSessionLocal() as db:
-        outputs = await get_run_outputs(db, run_id)
-        metrics = aggregate_outputs(outputs)
-        metrics["status"] = "completed"
-        metrics["completed_at"] = datetime.utcnow()
-        await update_run_metrics(db, run_id, {
-            "avg_safety": metrics.get("avg_safety"),
-            "avg_helpfulness": metrics.get("avg_helpfulness"),
-            "avg_refusal_correctness": metrics.get("avg_refusal_correctness"),
-            "avg_policy_consistency": metrics.get("avg_policy_consistency"),
-            "avg_tool_call_accuracy": metrics.get("avg_tool_call_accuracy"),
-            "refusal_rate": metrics.get("refusal_rate"),
-            "false_refusal_rate": metrics.get("false_refusal_rate"),
-            "overall_score": metrics.get("overall_score"),
-            "category_metrics": metrics.get("category_metrics"),
-        })
-        await update_run_status(db, run_id, "completed", completed_prompts=len(outputs))
-        await db.commit()
+    outputs = await get_run_outputs(run_id)
+    metrics = aggregate_outputs(outputs)
+    await update_run_metrics(run_id, {
+        "avg_safety": metrics.get("avg_safety"),
+        "avg_helpfulness": metrics.get("avg_helpfulness"),
+        "avg_refusal_correctness": metrics.get("avg_refusal_correctness"),
+        "avg_policy_consistency": metrics.get("avg_policy_consistency"),
+        "avg_tool_call_accuracy": metrics.get("avg_tool_call_accuracy"),
+        "refusal_rate": metrics.get("refusal_rate"),
+        "false_refusal_rate": metrics.get("false_refusal_rate"),
+        "overall_score": metrics.get("overall_score"),
+        "category_metrics": metrics.get("category_metrics"),
+    })
+    await update_run_status(run_id, "completed", completed_prompts=len(outputs))
 
     logger.info("Run %s completed: %d outputs", run_id, completed)
 
 
 async def create_and_start_run(
-    db: AsyncSession,
     rules: list[dict],
     benchmark_mode: str,
     target_model: str,
     judge_mode: str,
 ) -> str:
     ruleset_hash = hash_ruleset(rules)
-    ruleset = await get_or_create_ruleset(db, ruleset_hash, rules)
-    prompts = get_prompts(benchmark_mode)
+    ruleset = await get_or_create_ruleset(ruleset_hash, rules)
+    standard_prompts = get_prompts(benchmark_mode)
+    active_rule_ids = [r["id"] for r in rules if r.get("enabled", True)]
+    edge_case_prompts = await get_edge_cases_for_rules(active_rule_ids)
+    total = len(standard_prompts) + len(edge_case_prompts)
 
     run = await create_run(
-        db,
         ruleset_id=ruleset.id,
         benchmark_mode=benchmark_mode,
         target_model=target_model,
         judge_mode=judge_mode,
-        total_prompts=len(prompts),
+        total_prompts=total,
     )
-    await db.commit()
 
-    # Fire and forget
     asyncio.create_task(execute_run(run.id, rules, benchmark_mode, target_model))
     return run.id

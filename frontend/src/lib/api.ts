@@ -1,4 +1,4 @@
-import type { CompareResult, Rule, Run, RunOutput } from "./types";
+import type { CompareResult, EdgeCasePrompt, Rule, Run, RunOutput } from "./types";
 
 const BASE = "/api";
 
@@ -38,6 +38,17 @@ export const api = {
 
   compare: (run_id_a: string, run_id_b: string) =>
     post<CompareResult>("/compare", { run_id_a, run_id_b }),
+
+  generateEdgeCases: (ruleId: string, label: string, description: string) =>
+    post<{ rule_id: string; count: number; prompts: EdgeCasePrompt[] }>(
+      `/rules/${ruleId}/edge-cases`,
+      { label, description },
+    ),
+
+  getEdgeCases: (ruleId: string) =>
+    get<{ rule_id: string; count: number; prompts: EdgeCasePrompt[] }>(
+      `/rules/${ruleId}/edge-cases`,
+    ),
 
   streamRun: (runId: string): EventSource => {
     return new EventSource(`${BASE}/runs/${runId}/stream`);

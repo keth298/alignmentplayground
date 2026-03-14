@@ -1,4 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.core.edge_case_generator import generate_edge_cases, get_edge_cases
 
 router = APIRouter()
 
@@ -16,6 +19,27 @@ DEFAULT_RULES = [
 ]
 
 
+class EdgeCasesRequest(BaseModel):
+    label: str
+    description: str
+
+
 @router.get("/default")
 async def get_default_rules():
     return DEFAULT_RULES
+
+
+@router.post("/{rule_id}/edge-cases")
+async def generate_rule_edge_cases(rule_id: str, req: EdgeCasesRequest):
+    """Generate and persist 4 edge case prompts for a given rule."""
+    prompts = await generate_edge_cases(rule_id, req.label, req.description)
+    if not prompts:
+        raise HTTPException(status_code=500, detail="Edge case generation failed")
+    return {"rule_id": rule_id, "count": len(prompts), "prompts": prompts}
+
+
+@router.get("/{rule_id}/edge-cases")
+async def get_rule_edge_cases(rule_id: str):
+    """Retrieve previously generated edge cases for a rule."""
+    prompts = await get_edge_cases(rule_id)
+    return {"rule_id": rule_id, "count": len(prompts), "prompts": prompts}
