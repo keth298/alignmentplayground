@@ -1,0 +1,45 @@
+import type { CompareResult, Rule, Run, RunOutput } from "./types";
+
+const BASE = "/api";
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  return res.json();
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `POST ${path} failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export const api = {
+  getRules: () => get<Rule[]>("/rules/default"),
+  getBenchmarkStats: () => get<{ live_count: number; full_count: number; categories: string[]; category_counts: Record<string, number> }>("/benchmarks/stats"),
+
+  createRun: (body: {
+    rules: Rule[];
+    benchmark_mode: string;
+    target_model?: string;
+    judge_mode: string;
+  }) => post<{ run_id: string; status: string }>("/runs", body),
+
+  getRun: (id: string) => get<Run>(`/runs/${id}`),
+  listRuns: () => get<Run[]>("/runs"),
+  getRunOutputs: (id: string) => get<RunOutput[]>(`/runs/${id}/outputs`),
+
+  compare: (run_id_a: string, run_id_b: string) =>
+    post<CompareResult>("/compare", { run_id_a, run_id_b }),
+
+  streamRun: (runId: string): EventSource => {
+    return new EventSource(`${BASE}/runs/${runId}/stream`);
+  },
+};
