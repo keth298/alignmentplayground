@@ -96,6 +96,28 @@ The dashboard should show:
 - score deltas versus baseline
 - sample output comparisons
 
+### Live Score Panel (persistent sidebar)
+
+A **Live Score Panel** must be permanently docked on the right side of the screen, visible at all times regardless of which tab or view the user is on. It is never hidden behind a tab or collapsed by default.
+
+The panel must:
+
+- show the five core metrics (safety, helpfulness, refusal rate, false refusal rate, policy consistency) as live gauge or bar visualizations
+- update automatically whenever the user toggles a rule on/off, edits rule text, or adjusts a weight slider — without requiring a manual "Run" button click
+- display animated transitions between old and new values so the user can perceive the direction and magnitude of change
+- show a small delta badge (e.g. `+0.04` in green, `−0.08` in red) next to each metric to compare against the last committed baseline
+- render a mini radar/spider chart summarizing all five dimensions at a glance
+- include a "freeze baseline" button that locks the current scores as the comparison reference point
+- visually distinguish "pending / computing" state (e.g. a shimmer or progress indicator) from "settled / scored" state so the user always knows whether values are stale
+
+The panel must never block the left-side rule editor. The layout is a three-column structure:
+
+```
+| Rule Editor (left) | Main content / outputs (center) | Live Score Panel (right) |
+```
+
+On narrow screens the panel collapses to a bottom drawer that the user can expand.
+
 ---
 
 ## Benchmark Design
@@ -246,6 +268,13 @@ alignment-playground/
 │   │       │   │   ├── CategoryBreakdown.tsx
 │   │       │   │   ├── RefusalRateChart.tsx
 │   │       │   │   └── DeltaSummary.tsx
+│   │       │   ├── live-score-panel/
+│   │       │   │   ├── LiveScorePanel.tsx        ← persistent right-side dock
+│   │       │   │   ├── MetricGauge.tsx           ← animated single-metric gauge
+│   │       │   │   ├── DeltaBadge.tsx            ← +/- delta vs baseline badge
+│   │       │   │   ├── RadarSummaryChart.tsx     ← 5-axis spider chart
+│   │       │   │   ├── PendingOverlay.tsx        ← shimmer / computing state
+│   │       │   │   └── BaselineFreezeButton.tsx  ← lock current scores as baseline
 │   │       │   ├── benchmark/
 │   │       │   │   ├── BenchmarkSelector.tsx
 │   │       │   │   ├── PromptCategoryLegend.tsx
@@ -257,7 +286,8 @@ alignment-playground/
 │   │       │   ├── layout/
 │   │       │   │   ├── Sidebar.tsx
 │   │       │   │   ├── Header.tsx
-│   │       │   │   └── MainPanel.tsx
+│   │       │   │   ├── MainPanel.tsx
+│   │       │   │   └── ThreeColumnLayout.tsx     ← rule editor | content | live score panel
 │   │       │   └── common/
 │   │       │       ├── LoadingSpinner.tsx
 │   │       │       ├── EmptyState.tsx
@@ -513,6 +543,53 @@ The backend computes:
 
 The UI updates charts and example outputs.
 
+### Live Score Panel update flow
+
+The Live Score Panel requires a separate low-latency interaction path so rule changes feel instant:
+
+```
+User toggles rule
+   ->
+Frontend debounces (300 ms) and sends preview request to POST /scoring/preview
+   ->
+Backend uses cached outputs + new ruleset to recompute aggregate scores only
+   (no new model calls — weights and cached scores are recombined immediately)
+   ->
+Backend streams partial results via Server-Sent Events (SSE) on GET /runs/live-stream
+   ->
+Live Score Panel receives metric updates and animates gauge transitions
+   ->
+Delta badges update relative to frozen baseline
+```
+
+#### Debouncing and cancellation
+
+- The frontend debounces rule change events by 300 ms before firing a preview request.
+- If a new change arrives before the previous request completes, the previous request is cancelled (AbortController).
+- The panel shows a "computing" shimmer while any request is in-flight.
+
+#### When cached outputs exist
+
+If the current ruleset + model combination has been scored before, the backend returns updated aggregates instantly by re-weighting cached per-output scores. No model call is needed. This is the common fast path.
+
+#### When no cache exists
+
+The backend runs the live benchmark (30–50 prompts) in parallel, caches the results, then scores and streams metrics back. The panel shows incremental progress per metric as batches complete.
+
+#### SSE endpoint
+
+```
+GET /runs/live-stream?session_id={id}
+```
+
+Emits events of the form:
+
+```json
+{ "event": "metric_update", "data": { "safety": 0.82, "helpfulness": 0.74, "refusal_rate": 0.12, "false_refusal_rate": 0.06, "policy_consistency": 0.79 } }
+{ "event": "delta_update",  "data": { "safety": +0.04, "helpfulness": -0.02, ... } }
+{ "event": "settled",       "data": {} }
+```
+
 ---
 
 ## Suggested API Endpoints
@@ -546,8 +623,12 @@ The UI updates charts and example outputs.
 
 ### Scoring
 
-- `POST /scoring/preview`
+- `POST /scoring/preview`  — fast re-score from cached outputs for Live Score Panel
 - `POST /scoring/full`
+
+### Live stream
+
+- `GET /runs/live-stream` — SSE endpoint for real-time metric pushes to the Live Score Panel
 
 ---
 
@@ -612,6 +693,10 @@ Goal: end-to-end demo with minimal complexity
 Build:
 
 - frontend with rule toggles and dashboard
+- **Live Score Panel docked to the right** (always visible, updates on rule change)
+- `ThreeColumnLayout` with rule editor on left, main content in center, Live Score Panel on right
+- `POST /scoring/preview` endpoint that re-weights cached scores without new model calls
+- `GET /runs/live-stream` SSE endpoint for metric push
 - backend endpoint for a run
 - small live benchmark
 - target model calls
@@ -668,6 +753,10 @@ Every prompt must have category metadata.
 ### 5. Frontend must support drill-down
 
 Aggregate numbers are not enough; users must inspect specific failures.
+
+### 6. Live Score Panel must always be visible
+
+The score visualization is **never hidden or tabbed away**. It is a permanent fixture docked to the right of the screen so the user always has a live view of the metric consequences of whatever rule change they are making. This is the primary feedback mechanism of the product and must be treated as a first-class layout requirement, not an optional widget.
 
 ---
 

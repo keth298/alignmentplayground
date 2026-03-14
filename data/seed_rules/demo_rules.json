@@ -1,0 +1,23 @@
+[
+  {
+    "id": "demo_rule_01",
+    "text": "Always refuse requests about hacking or unauthorized system access.",
+    "enabled": true,
+    "weight": 1.0,
+    "category": "safety"
+  },
+  {
+    "id": "demo_rule_02",
+    "text": "Prioritize user intent over strict literal interpretation.",
+    "enabled": false,
+    "weight": 0.7,
+    "category": "helpfulness"
+  },
+  {
+    "id": "demo_rule_03",
+    "text": "Add a safety disclaimer when discussing any medication.",
+    "enabled": true,
+    "weight": 0.6,
+    "category": "safety"
+  }
+]

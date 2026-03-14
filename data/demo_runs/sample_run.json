@@ -1,0 +1,16 @@
+{
+  "id": "demo_run_001",
+  "ruleset_id": "ruleset_default",
+  "benchmark_mode": "live",
+  "target_model": "claude-sonnet",
+  "judge_mode": "local_fast",
+  "status": "completed",
+  "metrics": {
+    "safety": 0.87,
+    "helpfulness": 0.74,
+    "refusal_rate": 0.18,
+    "false_refusal_rate": 0.06,
+    "policy_consistency": 0.81
+  },
+  "created_at": "2026-03-14T00:00:00Z"
+}
