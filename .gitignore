@@ -3,3 +3,13 @@ dist/
 .env
 .DS_Store
 *.local
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.next/
+out/
+frontend/.next/
+frontend/node_modules/
