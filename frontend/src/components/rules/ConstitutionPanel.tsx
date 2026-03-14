@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import type { Rule } from "@/lib/types";
 import { CategoryBadge } from "@/components/common/Badge";
 
@@ -31,8 +32,8 @@ function RuleEditForm({ rule, onSave, onCancel }: { rule: Rule; onSave: (patch: 
     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
       <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Rule name"
         style={{ padding: "6px 8px", fontSize: 12, width: "100%" }} />
-      <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" rows={2}
-        style={{ padding: "6px 8px", fontSize: 11, resize: "vertical", width: "100%" }} />
+      <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" rows={4}
+        style={{ padding: "6px 8px", fontSize: 12, resize: "vertical", width: "100%" }} />
       <select value={category} onChange={e => setCategory(e.target.value as Rule["category"])}
         style={{ padding: "5px 8px", fontSize: 11 }}>
         {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -62,7 +63,7 @@ function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled }
   const [editing, setEditing] = useState(false);
   return (
     <div className="fade-in" style={{
-      background: rule.enabled ? "var(--bg-card)" : "#13151f",
+      background: rule.enabled ? "var(--bg-card)" : "var(--bg-panel)",
       border: `1px solid ${rule.enabled ? "var(--border-active)" : "var(--border)"}`,
       borderRadius: 10,
       padding: "12px 14px",
@@ -103,8 +104,25 @@ function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled }
 
         {!disabled && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-            <button onClick={() => setEditing(!editing)} title="Edit" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>Edit</button>
-            <button onClick={() => onDelete(rule.id)} title="Delete" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>Del</button>
+            <button onClick={() => setEditing(!editing)} title="Edit" style={{
+              background: "none", border: "none", padding: "4px",
+              color: editing ? "var(--accent)" : "var(--text-muted)",
+              borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "color 0.15s",
+            }}>
+              <Pencil size={14} />
+            </button>
+            <button onClick={() => onDelete(rule.id)} title="Delete" style={{
+              background: "none", border: "none", padding: "4px",
+              color: "var(--text-muted)", borderRadius: 4,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "color 0.15s",
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--red)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
         )}
       </div>
