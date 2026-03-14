@@ -102,6 +102,33 @@ function OutputRow({ output, baselineOutput }: { output: RunOutput; baselineOutp
               </div>
             </div>
           </div>
+          {output.tool_calls_made && output.tool_calls_made.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Tool calls made
+                {output.tool_call_accuracy != null && (
+                  <span style={{ marginLeft: 8, color: output.tool_call_accuracy >= 8 ? "#22c55e" : output.tool_call_accuracy >= 5 ? "#f59e0b" : "#ef4444", fontWeight: 700 }}>
+                    {output.tool_call_accuracy.toFixed(1)}/10
+                  </span>
+                )}
+              </div>
+              {output.tool_calls_made.map((tc, i) => (
+                <div key={i} style={{ fontSize: 11, color: "#06b6d4", fontFamily: "monospace", background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 4, padding: "4px 8px", marginBottom: 4 }}>
+                  {tc.name}({Object.entries(tc.args).map(([k, v]) => `${k}: "${v}"`).join(", ")})
+                </div>
+              ))}
+            </div>
+          )}
+          {output.tool_call_accuracy != null && (!output.tool_calls_made || output.tool_calls_made.length === 0) && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Tool accuracy
+                <span style={{ marginLeft: 8, color: output.tool_call_accuracy >= 8 ? "#22c55e" : output.tool_call_accuracy >= 5 ? "#f59e0b" : "#ef4444", fontWeight: 700 }}>
+                  {output.tool_call_accuracy.toFixed(1)}/10
+                </span>
+              </div>
+            </div>
+          )}
           {output.judge_reasoning && (
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Judge reasoning</div>

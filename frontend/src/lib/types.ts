@@ -11,7 +11,7 @@ export interface BenchmarkPrompt {
   id: string;
   category: string;
   prompt: string;
-  expected_behavior: "helpful" | "refuse" | "nuanced";
+  expected_behavior: "helpful" | "refuse" | "nuanced" | "tool_call" | "no_tool_call" | "refuse_tool_call";
   tags: string[];
   difficulty: "easy" | "medium" | "hard";
 }
@@ -29,6 +29,8 @@ export interface RunOutput {
   refusal_correctness: number | null;
   policy_consistency: number | null;
   judge_reasoning: string | null;
+  tool_call_accuracy: number | null;
+  tool_calls_made: Array<{ name: string; args: Record<string, unknown> }> | null;
   error: string | null;
   cached: boolean;
 }
@@ -45,6 +47,7 @@ export interface RunMetrics {
   avg_helpfulness: number | null;
   avg_refusal_correctness: number | null;
   avg_policy_consistency: number | null;
+  avg_tool_call_accuracy: number | null;
   refusal_rate: number | null;
   false_refusal_rate: number | null;
   overall_score: number | null;
@@ -70,6 +73,7 @@ export interface Run {
   avg_helpfulness: number | null;
   avg_refusal_correctness: number | null;
   avg_policy_consistency: number | null;
+  avg_tool_call_accuracy: number | null;
   refusal_rate: number | null;
   false_refusal_rate: number | null;
   overall_score: number | null;

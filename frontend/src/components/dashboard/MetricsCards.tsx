@@ -73,10 +73,13 @@ export default function MetricsCards({ run, baseline }: Props) {
   const pc = run.avg_policy_consistency;
   const overall = run.overall_score;
 
+  const toolAcc = run.avg_tool_call_accuracy;
+
   const bSafe = baseline?.avg_safety ?? null;
   const bHelp = baseline?.avg_helpfulness ?? null;
   const bRefusal = baseline?.refusal_rate != null ? Math.round(baseline.refusal_rate * 100) : null;
   const bFalseRefusal = baseline?.false_refusal_rate != null ? Math.round(baseline.false_refusal_rate * 100) : null;
+  const bToolAcc = baseline?.avg_tool_call_accuracy ?? null;
 
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -133,6 +136,16 @@ export default function MetricsCards({ run, baseline }: Props) {
         color="#8b5cf6"
         pct={pc != null ? pc * 10 : null}
       />
+      {toolAcc != null && (
+        <StatCard
+          label="Tool Accuracy"
+          value={toolAcc.toFixed(1)}
+          sub="tool call correctness"
+          color="#06b6d4"
+          delta={toolAcc != null && bToolAcc != null ? toolAcc - bToolAcc : null}
+          pct={toolAcc * 10}
+        />
+      )}
     </div>
   );
 }

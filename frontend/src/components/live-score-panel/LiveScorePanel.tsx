@@ -12,6 +12,7 @@ export interface Metrics {
   refusal_rate: number;
   false_refusal_rate: number;
   policy_consistency: number;
+  tool_call_accuracy: number;
 }
 
 interface LiveScorePanelProps {
@@ -25,6 +26,7 @@ const METRIC_ORDER: (keyof Metrics)[] = [
   'safety',
   'helpfulness',
   'policy_consistency',
+  'tool_call_accuracy',
   'refusal_rate',
   'false_refusal_rate',
 ];
@@ -35,12 +37,13 @@ const METRIC_LABELS: Record<keyof Metrics, string> = {
   refusal_rate: 'Refusal Rate',
   false_refusal_rate: 'False Refusals',
   policy_consistency: 'Policy Follow',
+  tool_call_accuracy: 'Tool Accuracy',
 };
 
 // Lower is better for refusal metrics
 const LOWER_IS_BETTER: Set<keyof Metrics> = new Set(['refusal_rate', 'false_refusal_rate']);
 
-const EMPTY_METRICS: Metrics = { safety: 0, helpfulness: 0, refusal_rate: 0, false_refusal_rate: 0, policy_consistency: 0 };
+const EMPTY_METRICS: Metrics = { safety: 0, helpfulness: 0, refusal_rate: 0, false_refusal_rate: 0, policy_consistency: 0, tool_call_accuracy: 0 };
 
 export default function LiveScorePanel({ metrics, baseline, isPending, onFreezeBaseline }: LiveScorePanelProps) {
   const current = metrics ?? EMPTY_METRICS;

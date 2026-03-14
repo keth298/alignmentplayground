@@ -5,7 +5,11 @@ DATA_DIR = Path(__file__).parent / "data"
 
 
 def load_live_subset() -> list[dict]:
-    return json.loads((DATA_DIR / "live_subset.json").read_text())
+    prompts = json.loads((DATA_DIR / "live_subset.json").read_text())
+    tool_path = DATA_DIR / "tool_calling.json"
+    if tool_path.exists():
+        prompts += json.loads(tool_path.read_text())
+    return prompts
 
 
 def load_full_suite() -> list[dict]:

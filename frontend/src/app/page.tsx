@@ -26,11 +26,13 @@ function deriveMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | n
       refusal_rate: run.refusal_rate ?? 0,
       false_refusal_rate: run.false_refusal_rate ?? 0,
       policy_consistency: (run.avg_policy_consistency ?? 0) / 10,
+      tool_call_accuracy: (run.avg_tool_call_accuracy ?? 0) / 10,
     };
   }
   if (scoredOutputs.length > 0) {
     const n = scoredOutputs.length;
     const shouldAnswer = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+    const toolOutputs = scoredOutputs.filter(o => o.tool_call_accuracy != null);
     return {
       safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / n / 10,
       helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / n / 10,
@@ -39,6 +41,9 @@ function deriveMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | n
         ? shouldAnswer.filter(o => o.refused).length / shouldAnswer.length
         : 0,
       policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / n / 10,
+      tool_call_accuracy: toolOutputs.length
+        ? toolOutputs.reduce((s, o) => s + (o.tool_call_accuracy ?? 0), 0) / toolOutputs.length / 10
+        : 0,
     };
   }
   return null;
@@ -48,6 +53,7 @@ function deriveMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | n
 function buildLiveRun(scoredOutputs: RunOutput[], benchmarkMode: "live" | "full", progress: { completed: number; total: number }): Run {
   const n = scoredOutputs.length;
   const shouldAnswer = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+  const toolOutputs = scoredOutputs.filter(o => o.tool_call_accuracy != null);
   return {
     id: "live", status: "running", benchmark_mode: benchmarkMode,
     target_model: "", judge_mode: "fast",
@@ -57,6 +63,9 @@ function buildLiveRun(scoredOutputs: RunOutput[], benchmarkMode: "live" | "full"
     avg_helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / n,
     avg_refusal_correctness: scoredOutputs.reduce((s, o) => s + (o.refusal_correctness ?? 0), 0) / n,
     avg_policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / n,
+    avg_tool_call_accuracy: toolOutputs.length
+      ? toolOutputs.reduce((s, o) => s + (o.tool_call_accuracy ?? 0), 0) / toolOutputs.length
+      : null,
     refusal_rate: scoredOutputs.filter(o => o.refused).length / n,
     false_refusal_rate: shouldAnswer.length ? shouldAnswer.filter(o => o.refused).length / shouldAnswer.length : 0,
     overall_score: null,
@@ -141,7 +150,7 @@ export default function Home() {
         total_prompts: benchmarkStats?.[`${benchmarkMode}_count` as keyof typeof benchmarkStats] ?? 0,
         completed_prompts: 0, created_at: new Date().toISOString(), completed_at: null,
         ruleset: null, avg_safety: null, avg_helpfulness: null,
-        avg_refusal_correctness: null, avg_policy_consistency: null,
+        avg_refusal_correctness: null, avg_policy_consistency: null, avg_tool_call_accuracy: null,
         refusal_rate: null, false_refusal_rate: null, overall_score: null, category_metrics: null,
       };
       setRuns(prev => [newRun, ...prev]);
@@ -164,6 +173,7 @@ export default function Home() {
             avg_helpfulness: payload.metrics.avg_helpfulness,
             avg_refusal_correctness: payload.metrics.avg_refusal_correctness,
             avg_policy_consistency: payload.metrics.avg_policy_consistency,
+            avg_tool_call_accuracy: payload.metrics.avg_tool_call_accuracy,
             refusal_rate: payload.metrics.refusal_rate,
             false_refusal_rate: payload.metrics.false_refusal_rate,
             overall_score: payload.metrics.overall_score,
