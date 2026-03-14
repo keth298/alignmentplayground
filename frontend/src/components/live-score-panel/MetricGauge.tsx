@@ -15,18 +15,21 @@ interface MetricGaugeProps {
 
 export default function MetricGauge({ value, metricKey }: MetricGaugeProps) {
   const color = COLORS[metricKey] ?? '#6b7280';
-  const pct = Math.round(value * 100);
+  const pct = Math.min(100, Math.round(value * 100));
 
   return (
-    <div className="w-full">
-      <div className="flex justify-between text-xs font-mono text-gray-600 mb-1">
-        <span>{pct}%</span>
+    <div style={{ width: '100%' }}>
+      <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)', marginBottom: 4 }}>
+        {pct}%
       </div>
-      <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
+      <div style={{ height: 5, width: '100%', background: 'var(--bg-card)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%',
+          width: `${pct}%`,
+          backgroundColor: color,
+          borderRadius: 3,
+          transition: 'width 0.5s ease-out',
+        }} />
       </div>
     </div>
   );

@@ -2,10 +2,18 @@
 
 export default function PendingOverlay() {
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-50/70 rounded-lg pointer-events-none">
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs text-gray-500">Computing&hellip;</span>
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 10,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(13, 15, 26, 0.75)', borderRadius: 8, pointerEvents: 'none',
+    }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width: 18, height: 18,
+          border: '2px solid #6366f1', borderTopColor: 'transparent',
+          borderRadius: '50%', animation: 'spin 1s linear infinite',
+        }} />
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Computing…</span>
       </div>
     </div>
   );

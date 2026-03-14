@@ -11,11 +11,15 @@ export default function DeltaBadge({ delta }: DeltaBadgeProps) {
   const label = `${positive ? '+' : ''}${(delta * 100).toFixed(1)}%`;
 
   return (
-    <span
-      className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${
-        positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-      }`}
-    >
+    <span style={{
+      fontSize: 10,
+      fontFamily: 'monospace',
+      fontWeight: 600,
+      padding: '2px 6px',
+      borderRadius: 4,
+      background: positive ? '#22c55e20' : '#ef444420',
+      color: positive ? '#22c55e' : '#ef4444',
+    }}>
       {label}
     </span>
   );

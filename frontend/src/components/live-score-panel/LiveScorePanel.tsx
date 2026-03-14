@@ -5,7 +5,6 @@ import RadarSummaryChart from './RadarSummaryChart';
 import DeltaBadge from './DeltaBadge';
 import PendingOverlay from './PendingOverlay';
 import BaselineFreezeButton from './BaselineFreezeButton';
-import { useState, useCallback } from 'react';
 
 export interface Metrics {
   safety: number;
@@ -16,7 +15,7 @@ export interface Metrics {
 }
 
 interface LiveScorePanelProps {
-  metrics: Metrics;
+  metrics: Metrics | null;
   baseline: Metrics | null;
   isPending: boolean;
   onFreezeBaseline: () => void;
@@ -25,58 +24,81 @@ interface LiveScorePanelProps {
 const METRIC_ORDER: (keyof Metrics)[] = [
   'safety',
   'helpfulness',
+  'policy_consistency',
   'refusal_rate',
   'false_refusal_rate',
-  'policy_consistency',
 ];
 
 const METRIC_LABELS: Record<keyof Metrics, string> = {
   safety: 'Safety',
   helpfulness: 'Helpfulness',
   refusal_rate: 'Refusal Rate',
-  false_refusal_rate: 'False Refusal Rate',
-  policy_consistency: 'Policy Consistency',
+  false_refusal_rate: 'False Refusals',
+  policy_consistency: 'Policy Follow',
 };
 
-// Lower is better for refusal rates
+// Lower is better for refusal metrics
 const LOWER_IS_BETTER: Set<keyof Metrics> = new Set(['refusal_rate', 'false_refusal_rate']);
 
-export default function LiveScorePanel({
-  metrics,
-  baseline,
-  isPending,
-  onFreezeBaseline,
-}: LiveScorePanelProps) {
+const EMPTY_METRICS: Metrics = { safety: 0, helpfulness: 0, refusal_rate: 0, false_refusal_rate: 0, policy_consistency: 0 };
+
+export default function LiveScorePanel({ metrics, baseline, isPending, onFreezeBaseline }: LiveScorePanelProps) {
+  const current = metrics ?? EMPTY_METRICS;
+
   return (
-    <aside className="relative flex flex-col h-full w-72 shrink-0 border-l bg-gray-50 p-4 gap-5 overflow-y-auto">
+    <aside style={{
+      position: 'relative',
+      display: 'flex',
+      flexDirection: 'column',
+      width: 220,
+      flexShrink: 0,
+      borderLeft: '1px solid var(--border)',
+      background: 'var(--bg-panel)',
+      padding: '14px 12px',
+      gap: 14,
+      overflowY: 'auto',
+    }}>
       {isPending && <PendingOverlay />}
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Live Scores</h2>
-        <BaselineFreezeButton onFreeze={onFreezeBaseline} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Live Scores
+        </h2>
+        {metrics && <BaselineFreezeButton onFreeze={onFreezeBaseline} />}
       </div>
 
-      {/* Radar summary */}
-      <RadarSummaryChart metrics={metrics} />
+      {/* Radar */}
+      {metrics ? (
+        <RadarSummaryChart metrics={current} baseline={baseline} />
+      ) : (
+        <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 11, textAlign: 'center' }}>
+          Run a benchmark to<br />see scores here
+        </div>
+      )}
 
       {/* Per-metric gauges */}
-      <div className="flex flex-col gap-4">
-        {METRIC_ORDER.map((key) => {
-          const delta = baseline ? metrics[key] - baseline[key] : null;
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {METRIC_ORDER.map(key => {
+          const val = current[key];
+          const delta = baseline ? metrics ? current[key] - baseline[key] : null : null;
           const lowerIsBetter = LOWER_IS_BETTER.has(key);
           return (
             <div key={key}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">{METRIC_LABELS[key]}</span>
-                {delta !== null && (
-                  <DeltaBadge delta={lowerIsBetter ? -delta : delta} />
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{METRIC_LABELS[key]}</span>
+                {delta !== null && <DeltaBadge delta={lowerIsBetter ? -delta : delta} />}
               </div>
-              <MetricGauge value={metrics[key]} metricKey={key} />
+              <MetricGauge value={metrics ? val : 0} metricKey={key} />
             </div>
           );
         })}
       </div>
+
+      {baseline && (
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          📌 Baseline pinned · deltas shown above
+        </div>
+      )}
     </aside>
   );
 }

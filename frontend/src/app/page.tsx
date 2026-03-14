@@ -6,6 +6,7 @@ import MetricsCards from "@/components/dashboard/MetricsCards";
 import { SafetyHelpfulnessScatter, CategoryRadar, RefusalRateBar } from "@/components/dashboard/TradeoffChart";
 import OutputsTable from "@/components/outputs/OutputsTable";
 import RunHistory from "@/components/layout/RunHistory";
+import LiveScorePanel, { type Metrics } from "@/components/live-score-panel/LiveScorePanel";
 import { api } from "@/lib/api";
 import type { Rule, Run, RunOutput, StreamPayload } from "@/lib/types";
 
@@ -14,6 +15,30 @@ function buildSystemPrompt(rules: Rule[]): string {
   if (!active.length) return "You are a helpful AI assistant.";
   const lines = active.map((r, i) => `${i + 1}. [${r.weight.toFixed(2)}] ${r.label}: ${r.description}`).join("\n");
   return `You are a helpful AI assistant. Follow these rules in order of priority:\n\n${lines}\n\nAlways apply these rules consistently.`;
+}
+
+function runToMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | null {
+  if (run?.avg_safety != null) {
+    return {
+      safety: run.avg_safety / 10,
+      helpfulness: (run.avg_helpfulness ?? 0) / 10,
+      refusal_rate: run.refusal_rate ?? 0,
+      false_refusal_rate: run.false_refusal_rate ?? 0,
+      policy_consistency: (run.avg_policy_consistency ?? 0) / 10,
+    };
+  }
+  if (scoredOutputs.length > 0) {
+    const n = scoredOutputs.length;
+    const safe = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+    return {
+      safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / n / 10,
+      helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / n / 10,
+      refusal_rate: scoredOutputs.filter(o => o.refused).length / n,
+      false_refusal_rate: safe.length ? safe.filter(o => o.refused).length / safe.length : 0,
+      policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / n / 10,
+    };
+  }
+  return null;
 }
 
 function ProgressBar({ completed, total }: { completed: number; total: number }) {
@@ -41,12 +66,12 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [baseline, setBaseline] = useState<Run | null>(null);
   const [baselineOutputs, setBaselineOutputs] = useState<RunOutput[]>([]);
+  const [pinnedMetrics, setPinnedMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"rules" | "history">("rules");
   const [benchmarkStats, setBenchmarkStats] = useState<{ live_count: number; full_count: number } | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
-  // Load default rules and benchmark stats
   useEffect(() => {
     api.getRules().then(setRules).catch(console.error);
     api.getBenchmarkStats().then(setBenchmarkStats).catch(console.error);
@@ -54,6 +79,10 @@ export default function Home() {
   }, []);
 
   const selectedRun = runs.find(r => r.id === selectedRunId) ?? null;
+  const scoredOutputs = liveOutputs.filter(o => o.safety_score != null);
+
+  // Derive metrics for the live score panel
+  const liveMetrics = runToMetrics(selectedRun, scoredOutputs);
 
   const runBenchmark = async () => {
     if (isRunning) return;
@@ -65,7 +94,6 @@ export default function Home() {
     try {
       const { run_id } = await api.createRun({ rules, benchmark_mode: benchmarkMode, judge_mode: "fast" });
 
-      // Add optimistic run to list
       setSelectedRunId(run_id);
       const newRun: Run = {
         id: run_id, status: "pending", benchmark_mode: benchmarkMode,
@@ -78,7 +106,6 @@ export default function Home() {
       };
       setRuns(prev => [newRun, ...prev]);
 
-      // Subscribe to SSE stream
       if (esRef.current) esRef.current.close();
       const es = api.streamRun(run_id);
       esRef.current = es;
@@ -88,7 +115,6 @@ export default function Home() {
         setLiveOutputs(payload.outputs);
         setLiveProgress({ completed: payload.completed_prompts, total: payload.total_prompts });
 
-        // Update run in list
         setRuns(prev => prev.map(r => r.id === run_id ? {
           ...r,
           status: payload.status as Run["status"],
@@ -133,9 +159,31 @@ export default function Home() {
     setBaselineOutputs(outputs);
   }, []);
 
+  const handleFreezeBaseline = useCallback(() => {
+    if (liveMetrics) setPinnedMetrics(liveMetrics);
+  }, [liveMetrics]);
+
   const outputs = liveOutputs;
-  const scoredOutputs = outputs.filter(o => o.safety_score != null);
   const isEmpty = outputs.length === 0;
+
+  // For MetricsCards — build a fakeRun from live outputs when no completed run is selected
+  const metricsRun: Run | null = selectedRun ?? (scoredOutputs.length > 0 ? {
+    id: "live", status: "running", benchmark_mode: benchmarkMode,
+    target_model: "", judge_mode: "fast", total_prompts: liveProgress.total,
+    completed_prompts: liveProgress.completed, created_at: null, completed_at: null,
+    ruleset: null,
+    avg_safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / scoredOutputs.length,
+    avg_helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / scoredOutputs.length,
+    avg_refusal_correctness: scoredOutputs.reduce((s, o) => s + (o.refusal_correctness ?? 0), 0) / scoredOutputs.length,
+    avg_policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / scoredOutputs.length,
+    refusal_rate: scoredOutputs.filter(o => o.refused).length / scoredOutputs.length,
+    false_refusal_rate: (() => {
+      const sa = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+      return sa.length ? sa.filter(o => o.refused).length / sa.length : 0;
+    })(),
+    overall_score: null,
+    category_metrics: null,
+  } : null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -169,6 +217,14 @@ export default function Home() {
               ⚠ {error}
             </span>
           )}
+
+          <a href="/compare" style={{
+            padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-active)",
+            fontSize: 12, fontWeight: 600, color: "var(--text-muted)",
+            background: "transparent", cursor: "pointer", textDecoration: "none",
+          }}>
+            ⇄ Compare
+          </a>
 
           {/* Mode toggle */}
           <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
@@ -205,7 +261,6 @@ export default function Home() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left sidebar */}
         <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
-          {/* Tab strip */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             {(["rules", "history"] as const).map(tab => (
               <button key={tab} onClick={() => setSidebarTab(tab)} style={{
@@ -256,33 +311,8 @@ export default function Home() {
             </div>
           ) : (
             <div style={{ padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Metrics */}
-              {selectedRun && (
-                <MetricsCards run={selectedRun} baseline={baseline} />
-              )}
-              {!selectedRun && scoredOutputs.length > 0 && (() => {
-                const scored = scoredOutputs;
-                const fakeRun: Run = {
-                  id: "live", status: "running", benchmark_mode: benchmarkMode,
-                  target_model: "", judge_mode: "fast", total_prompts: liveProgress.total,
-                  completed_prompts: liveProgress.completed, created_at: null, completed_at: null,
-                  ruleset: null,
-                  avg_safety: scored.reduce((s, o) => s + (o.safety_score ?? 0), 0) / scored.length,
-                  avg_helpfulness: scored.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / scored.length,
-                  avg_refusal_correctness: scored.reduce((s, o) => s + (o.refusal_correctness ?? 0), 0) / scored.length,
-                  avg_policy_consistency: scored.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / scored.length,
-                  refusal_rate: scored.filter(o => o.refused).length / scored.length,
-                  false_refusal_rate: (() => {
-                    const sa = scored.filter(o => o.expected_behavior !== "refuse");
-                    return sa.length ? sa.filter(o => o.refused).length / sa.length : 0;
-                  })(),
-                  overall_score: null,
-                  category_metrics: null,
-                };
-                return <MetricsCards run={fakeRun} baseline={baseline} />;
-              })()}
+              {metricsRun && <MetricsCards run={metricsRun} baseline={baseline} />}
 
-              {/* Charts */}
               {scoredOutputs.length > 0 && (
                 <>
                   <SafetyHelpfulnessScatter outputs={scoredOutputs} />
@@ -293,13 +323,20 @@ export default function Home() {
                 </>
               )}
 
-              {/* Outputs table */}
               {outputs.length > 0 && (
                 <OutputsTable outputs={outputs} baselineOutputs={baselineOutputs.length > 0 ? baselineOutputs : undefined} />
               )}
             </div>
           )}
         </div>
+
+        {/* Right panel — Live Score Panel */}
+        <LiveScorePanel
+          metrics={liveMetrics}
+          baseline={pinnedMetrics}
+          isPending={isRunning}
+          onFreezeBaseline={handleFreezeBaseline}
+        />
       </div>
     </div>
   );

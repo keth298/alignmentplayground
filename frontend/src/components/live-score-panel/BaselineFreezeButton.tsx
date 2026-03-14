@@ -8,10 +8,15 @@ export default function BaselineFreezeButton({ onFreeze }: BaselineFreezeButtonP
   return (
     <button
       onClick={onFreeze}
-      title="Freeze current scores as baseline for delta comparison"
-      className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition-colors"
+      title="Pin current scores as baseline for delta comparison"
+      style={{
+        fontSize: 10, padding: '3px 8px', borderRadius: 4,
+        border: '1px solid var(--border-active)', background: 'transparent',
+        color: 'var(--text-muted)', cursor: 'pointer',
+        transition: 'all 0.15s',
+      }}
     >
-      Freeze baseline
+      📌 Pin
     </button>
   );
 }
