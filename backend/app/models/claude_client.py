@@ -1,23 +1,25 @@
-import anthropic
+from groq import AsyncGroq
 
 from app.config import settings
 
-_client: anthropic.AsyncAnthropic | None = None
+_client: AsyncGroq | None = None
 
 
-def get_client() -> anthropic.AsyncAnthropic:
+def get_client() -> AsyncGroq:
     global _client
     if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        _client = AsyncGroq(api_key=settings.groq_api_key)
     return _client
 
 
 async def complete(prompt: str, system: str, model: str, max_tokens: int = 512) -> str:
     client = get_client()
-    msg = await client.messages.create(
+    response = await client.chat.completions.create(
         model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
         max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
     )
-    return msg.content[0].text if msg.content else ""
+    return response.choices[0].message.content or ""
