@@ -1,24 +1,24 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg-base: #080a12;
-  --bg-panel: #0d0f1a;
-  --bg-card: #1e2030;
-  --bg-card-hover: #242640;
-  --border: #1e2234;
-  --border-active: #3b4263;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-faint: #334155;
+  --bg-base: #ffffff;
+  --bg-panel: #f8f9fb;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f3f9;
+  --border: #e2e8f0;
+  --border-active: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-faint: #cbd5e1;
   --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-glow: #6366f140;
-  --green: #22c55e;
-  --red: #ef4444;
-  --orange: #f59e0b;
-  --purple: #8b5cf6;
-  --blue: #3b82f6;
+  --accent-hover: #4f46e5;
+  --accent-glow: #6366f125;
+  --green: #16a34a;
+  --red: #dc2626;
+  --orange: #d97706;
+  --purple: #7c3aed;
+  --blue: #2563eb;
 }
 
 html, body { height: 100%; background: var(--bg-base); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
@@ -28,7 +28,7 @@ a { color: inherit; text-decoration: none; }
 input, textarea, select {
   font-family: inherit;
   color: var(--text-primary);
-  background: var(--bg-panel);
+  background: var(--bg-base);
   border: 1px solid var(--border);
   border-radius: 6px;
   outline: none;
@@ -40,7 +40,7 @@ button:disabled { cursor: not-allowed; }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2d3152; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -48,9 +48,7 @@ button:disabled { cursor: not-allowed; }
 
 .fade-in { animation: fadeIn 0.2s ease; }
 
-/* Hover utility for sidebar items */
 [data-hover]:hover { background: var(--bg-card-hover); }
 
-/* Scrollbar on main containers */
 .scroll-thin::-webkit-scrollbar { width: 4px; }
-.scroll-thin::-webkit-scrollbar-thumb { background: #2d3152; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; }

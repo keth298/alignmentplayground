@@ -206,7 +206,7 @@ export default function Home() {
       {/* ── Header ── */}
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 20px", height: 52, background: "#080a12",
+        padding: "0 20px", height: 52, background: "var(--bg-base)",
         borderBottom: "1px solid var(--border)", flexShrink: 0, zIndex: 10, gap: 12,
       }}>
         {/* Left: brand */}
@@ -270,7 +270,7 @@ export default function Home() {
           {/* Run button */}
           <button onClick={runBenchmark} disabled={isRunning} style={{
             padding: "7px 18px", borderRadius: 7, border: "none", flexShrink: 0,
-            background: isRunning ? "#1e2234" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            background: isRunning ? "var(--border)" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
             color: isRunning ? "#64748b" : "#fff",
             fontSize: 13, fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", gap: 7,
@@ -288,7 +288,7 @@ export default function Home() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
         {/* ── Left sidebar ── */}
-        <div style={{ width: 288, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
+        <div style={{ width: 400, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
           {/* Tab strip */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             {(["rules", "history"] as const).map(tab => (
