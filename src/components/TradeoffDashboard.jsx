@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -6,7 +7,9 @@ import {
 import { CATEGORY_COLORS } from '../data/benchmarks'
 
 // ─── Small stat card ────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, color = '#6366f1' }) {
+function StatCard({ label, value, sub, color = '#6366f1', delta }) {
+  const deltaColor = delta > 0 ? '#22c55e' : delta < 0 ? '#ef4444' : '#64748b'
+  const deltaSign = delta > 0 ? '+' : ''
   return (
     <div style={{
       background: '#1e2030',
@@ -19,8 +22,15 @@ function StatCard({ label, value, sub, color = '#6366f1' }) {
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {label}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-        {value}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+          {value}
+        </div>
+        {delta !== undefined && delta !== null && (
+          <div style={{ fontSize: 12, fontWeight: 600, color: deltaColor }}>
+            {deltaSign}{typeof delta === 'number' ? (Number.isInteger(delta) ? delta : delta.toFixed(1)) : delta}
+          </div>
+        )}
       </div>
       {sub && <div style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>{sub}</div>}
     </div>
@@ -49,54 +59,172 @@ function ScatterTooltip({ active, payload }) {
   )
 }
 
-// ─── Result row in the results table ────────────────────────────────────────
-function ResultRow({ result }) {
+// ─── Result row with expandable output ───────────────────────────────────────
+function ResultRow({ result, baselineResult }) {
+  const [expanded, setExpanded] = useState(false)
   const dot = CATEGORY_COLORS[result.category] || '#888'
+  const isScored = result.safetyScore !== undefined
+
+  const helpDelta = (baselineResult && isScored && baselineResult.helpfulnessScore !== undefined)
+    ? result.helpfulnessScore - baselineResult.helpfulnessScore
+    : null
+  const safeDelta = (baselineResult && isScored && baselineResult.safetyScore !== undefined)
+    ? result.safetyScore - baselineResult.safetyScore
+    : null
+
+  const deltaStyle = (d) => ({
+    fontSize: 10,
+    color: d > 0 ? '#22c55e' : d < 0 ? '#ef4444' : '#64748b',
+    marginLeft: 3,
+  })
+
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 60px 60px 60px',
-      gap: 8,
-      padding: '8px 12px',
-      borderBottom: '1px solid #1a1d2e',
-      alignItems: 'center',
-      fontSize: 12,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
-        <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {result.label}
-        </span>
+    <>
+      <div
+        onClick={() => isScored && setExpanded(!expanded)}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 72px 72px 60px',
+          gap: 8,
+          padding: '8px 12px',
+          borderBottom: expanded ? 'none' : '1px solid #1a1d2e',
+          alignItems: 'center',
+          fontSize: 12,
+          cursor: isScored ? 'pointer' : 'default',
+          background: expanded ? '#171929' : 'transparent',
+          transition: 'background 0.15s',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+          <span style={{ color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {result.label}
+          </span>
+          {isScored && (
+            <span style={{ color: '#475569', fontSize: 10, flexShrink: 0 }}>
+              {expanded ? '▲' : '▼'}
+            </span>
+          )}
+        </div>
+        <div style={{ textAlign: 'center', color: '#22c55e', fontVariantNumeric: 'tabular-nums' }}>
+          {result.helpfulnessScore?.toFixed(1) ?? '—'}
+          {helpDelta !== null && <span style={deltaStyle(helpDelta)}>{helpDelta > 0 ? '+' : ''}{helpDelta.toFixed(1)}</span>}
+        </div>
+        <div style={{ textAlign: 'center', color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+          {result.safetyScore?.toFixed(1) ?? '—'}
+          {safeDelta !== null && <span style={deltaStyle(safeDelta)}>{safeDelta > 0 ? '+' : ''}{safeDelta.toFixed(1)}</span>}
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          {result.refused === undefined
+            ? <span style={{ color: '#334155', fontSize: 11 }}>—</span>
+            : result.refused
+            ? <span style={{ color: '#ef4444', fontSize: 11 }}>⛔</span>
+            : <span style={{ color: '#22c55e', fontSize: 11 }}>✓</span>}
+        </div>
       </div>
-      <div style={{ textAlign: 'center', color: '#22c55e', fontVariantNumeric: 'tabular-nums' }}>
-        {result.helpfulnessScore?.toFixed(1) ?? '—'}
-      </div>
-      <div style={{ textAlign: 'center', color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
-        {result.safetyScore?.toFixed(1) ?? '—'}
-      </div>
-      <div style={{ textAlign: 'center' }}>
-        {result.refused
-          ? <span style={{ color: '#ef4444', fontSize: 11 }}>⛔</span>
-          : <span style={{ color: '#22c55e', fontSize: 11 }}>✓</span>}
-      </div>
-    </div>
+      {expanded && (
+        <div style={{
+          padding: '0 12px 12px',
+          borderBottom: '1px solid #1a1d2e',
+          background: '#171929',
+        }}>
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Prompt
+            </div>
+            <div style={{
+              fontSize: 12,
+              color: '#94a3b8',
+              background: '#0d0f1a',
+              border: '1px solid #1e2234',
+              borderRadius: 6,
+              padding: '8px 10px',
+              lineHeight: 1.5,
+            }}>
+              {result.prompt}
+            </div>
+          </div>
+          {result.response && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Response
+              </div>
+              <div style={{
+                fontSize: 12,
+                color: '#e2e8f0',
+                background: '#0d0f1a',
+                border: '1px solid #1e2234',
+                borderRadius: 6,
+                padding: '8px 10px',
+                lineHeight: 1.6,
+                maxHeight: 160,
+                overflowY: 'auto',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {result.response}
+              </div>
+            </div>
+          )}
+          {result.reasoning && (
+            <div>
+              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Judge reasoning
+              </div>
+              <div style={{
+                fontSize: 11,
+                color: '#64748b',
+                fontStyle: 'italic',
+                lineHeight: 1.5,
+              }}>
+                {result.reasoning}
+              </div>
+            </div>
+          )}
+          {result.error && (
+            <div style={{ fontSize: 11, color: '#ef4444' }}>Error: {result.error}</div>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 
 // ─── Main dashboard ──────────────────────────────────────────────────────────
-export default function TradeoffDashboard({ results, isRunning, progress, total }) {
+export default function TradeoffDashboard({ results, isRunning, progress, total, baseline, onSetBaseline }) {
   const done = results.filter(r => r.safetyScore !== undefined)
   const refused = done.filter(r => r.refused)
 
+  // False refusals: refused on prompts where expected behavior is 'helpful' or 'nuanced'
+  const shouldAnswer = done.filter(r => r.expectedBehavior !== 'refuse')
+  const falseRefusals = shouldAnswer.filter(r => r.refused)
+  // Correct refusals: refused when expected to refuse
+  const shouldRefuse = done.filter(r => r.expectedBehavior === 'refuse')
+  const correctRefusals = shouldRefuse.filter(r => r.refused)
+
   const avgHelp = done.length
-    ? (done.reduce((s, r) => s + (r.helpfulnessScore || 0), 0) / done.length).toFixed(1)
-    : '—'
+    ? (done.reduce((s, r) => s + (r.helpfulnessScore || 0), 0) / done.length)
+    : null
   const avgSafe = done.length
-    ? (done.reduce((s, r) => s + (r.safetyScore || 0), 0) / done.length).toFixed(1)
-    : '—'
-  const refusalRate = done.length
-    ? Math.round((refused.length / done.length) * 100)
-    : 0
+    ? (done.reduce((s, r) => s + (r.safetyScore || 0), 0) / done.length)
+    : null
+  const refusalRate = done.length ? Math.round((refused.length / done.length) * 100) : 0
+  const falseRefusalRate = shouldAnswer.length ? Math.round((falseRefusals.length / shouldAnswer.length) * 100) : 0
+
+  // Baseline deltas
+  const baselineDone = baseline ? baseline.filter(r => r.safetyScore !== undefined) : []
+  const baselineAvgHelp = baselineDone.length
+    ? baselineDone.reduce((s, r) => s + (r.helpfulnessScore || 0), 0) / baselineDone.length
+    : null
+  const baselineAvgSafe = baselineDone.length
+    ? baselineDone.reduce((s, r) => s + (r.safetyScore || 0), 0) / baselineDone.length
+    : null
+  const baselineRefusalRate = baselineDone.length
+    ? Math.round((baselineDone.filter(r => r.refused).length / baselineDone.length) * 100)
+    : null
+  const baselineShouldAnswer = baselineDone.filter(r => r.expectedBehavior !== 'refuse')
+  const baselineFalseRefusalRate = baselineShouldAnswer.length
+    ? Math.round((baselineShouldAnswer.filter(r => r.refused).length / baselineShouldAnswer.length) * 100)
+    : null
 
   // Scatter data
   const scatterData = done.map(r => ({
@@ -135,29 +263,71 @@ export default function TradeoffDashboard({ results, isRunning, progress, total 
 
   const isEmpty = done.length === 0
 
+  // Build baseline lookup map by id
+  const baselineMap = {}
+  if (baseline) {
+    baseline.forEach(r => { baselineMap[r.id] = r })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Top stat cards */}
-      <div style={{ display: 'flex', gap: 10, padding: '16px 20px 0', flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 10, padding: '16px 20px 0', flexShrink: 0, flexWrap: 'wrap' }}>
         <StatCard
           label="Avg Helpfulness"
-          value={avgHelp}
+          value={avgHelp !== null ? avgHelp.toFixed(1) : '—'}
           sub={`out of 10 · ${done.length} scored`}
           color="#22c55e"
+          delta={avgHelp !== null && baselineAvgHelp !== null ? avgHelp - baselineAvgHelp : null}
         />
         <StatCard
           label="Avg Safety"
-          value={avgSafe}
+          value={avgSafe !== null ? avgSafe.toFixed(1) : '—'}
           sub={`out of 10 · ${done.length} scored`}
           color="#6366f1"
+          delta={avgSafe !== null && baselineAvgSafe !== null ? avgSafe - baselineAvgSafe : null}
         />
         <StatCard
           label="Refusal Rate"
           value={`${refusalRate}%`}
           sub={`${refused.length} of ${done.length} refused`}
           color={refusalRate > 40 ? '#ef4444' : refusalRate > 20 ? '#f59e0b' : '#22c55e'}
+          delta={baselineRefusalRate !== null ? `${refusalRate - baselineRefusalRate}%` : null}
+        />
+        <StatCard
+          label="False Refusal Rate"
+          value={`${falseRefusalRate}%`}
+          sub={`${falseRefusals.length} of ${shouldAnswer.length} safe refused`}
+          color={falseRefusalRate > 20 ? '#ef4444' : falseRefusalRate > 10 ? '#f59e0b' : '#22c55e'}
+          delta={baselineFalseRefusalRate !== null ? `${falseRefusalRate - baselineFalseRefusalRate}%` : null}
         />
       </div>
+
+      {/* Baseline controls */}
+      {done.length > 0 && !isRunning && (
+        <div style={{ padding: '10px 20px 0', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => onSetBaseline(results)}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 6,
+              border: '1px solid #2d3152',
+              background: '#1e2030',
+              color: '#818cf8',
+              fontSize: 11,
+              cursor: 'pointer',
+              fontWeight: 500,
+            }}
+          >
+            📌 Set as Baseline
+          </button>
+          {baseline && (
+            <span style={{ fontSize: 11, color: '#475569' }}>
+              Baseline set · deltas shown in scores above
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Progress bar */}
       {isRunning && (
@@ -217,7 +387,6 @@ export default function TradeoffDashboard({ results, isRunning, progress, total 
                     tick={{ fill: '#475569', fontSize: 11 }} axisLine={{ stroke: '#2d3152' }} tickLine={false}
                   />
                   <Tooltip content={<ScatterTooltip />} />
-                  {/* Perfect alignment quadrant shading */}
                   <ReferenceLine x={7} stroke="#6366f120" strokeDasharray="4 4" />
                   <ReferenceLine y={7} stroke="#6366f120" strokeDasharray="4 4" />
                   <Scatter
@@ -260,10 +429,7 @@ export default function TradeoffDashboard({ results, isRunning, progress, total 
                     <PolarAngleAxis dataKey="category" tick={{ fill: '#64748b', fontSize: 10 }} />
                     <Radar name="Helpfulness" dataKey="helpfulness" stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
                     <Radar name="Safety" dataKey="safety" stroke="#6366f1" fill="#6366f1" fillOpacity={0.15} />
-                    <Legend
-                      wrapperStyle={{ fontSize: 11, color: '#64748b' }}
-                      iconSize={8}
-                    />
+                    <Legend wrapperStyle={{ fontSize: 11, color: '#64748b' }} iconSize={8} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
@@ -293,11 +459,11 @@ export default function TradeoffDashboard({ results, isRunning, progress, total 
               </div>
             </div>
 
-            {/* Results table */}
+            {/* Results table with drill-down */}
             <div style={{ background: '#1e2030', border: '1px solid #2d3152', borderRadius: 12, overflow: 'hidden' }}>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 60px 60px 60px',
+                gridTemplateColumns: '1fr 72px 72px 60px',
                 gap: 8,
                 padding: '10px 12px',
                 borderBottom: '1px solid #2d3152',
@@ -308,12 +474,18 @@ export default function TradeoffDashboard({ results, isRunning, progress, total 
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
               }}>
-                <div>Prompt</div>
+                <div>Prompt <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(click to expand)</span></div>
                 <div style={{ textAlign: 'center', color: '#22c55e' }}>Help</div>
                 <div style={{ textAlign: 'center', color: '#6366f1' }}>Safe</div>
                 <div style={{ textAlign: 'center' }}>Status</div>
               </div>
-              {done.map(r => <ResultRow key={r.id} result={r} />)}
+              {results.map(r => (
+                <ResultRow
+                  key={r.id}
+                  result={r}
+                  baselineResult={baselineMap[r.id]}
+                />
+              ))}
             </div>
           </div>
         )}

@@ -9,6 +9,7 @@ const CONCURRENCY = 3 // run this many prompts in parallel
 export default function App() {
   const [rules, setRules] = useState(DEFAULT_RULES)
   const [results, setResults] = useState([])
+  const [baseline, setBaseline] = useState(null)
   const [isRunning, setIsRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState(null)
@@ -103,7 +104,7 @@ export default function App() {
               letterSpacing: '0.05em',
               textTransform: 'uppercase',
             }}>
-              MVP
+              v0.2
             </span>
           </div>
         </div>
@@ -183,6 +184,8 @@ export default function App() {
             isRunning={isRunning}
             progress={progress}
             total={BENCHMARK_PROMPTS.length}
+            baseline={baseline}
+            onSetBaseline={setBaseline}
           />
         </div>
       </div>
