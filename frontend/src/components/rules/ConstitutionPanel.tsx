@@ -8,13 +8,13 @@ const CATEGORIES: Rule["category"][] = ["safety", "helpfulness", "restriction", 
 
 function WeightSlider({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, width: "100%" }}>
       <span style={{ fontSize: 10, color: "var(--text-muted)", width: 44, flexShrink: 0 }}>Weight</span>
       <input
         type="range" min="0.1" max="1.0" step="0.05"
         value={value} onChange={e => onChange(parseFloat(e.target.value))}
         disabled={disabled}
-        style={{ flex: 1, accentColor: "var(--accent)", height: 4, background: "transparent", border: "none" }}
+        style={{ flex: 1, minWidth: 0, accentColor: "var(--accent)", height: 4, background: "transparent", border: "none" }}
       />
       <span style={{ fontSize: 11, color: "#a5b4fc", width: 32, textAlign: "right", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
         {value.toFixed(2)}
@@ -128,16 +128,14 @@ function AddRuleForm({ onAdd, onCancel }: { onAdd: (r: Rule) => void; onCancel: 
       <div style={{ fontSize: 10, color: "var(--accent-hover)", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.06em" }}>New Rule</div>
       <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Rule name" autoFocus
         style={{ padding: "6px 8px", fontSize: 12, width: "100%", marginBottom: 6 }} />
-      <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)" rows={2}
-        style={{ padding: "6px 8px", fontSize: 11, resize: "vertical", width: "100%", marginBottom: 6 }} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-        <select value={category} onChange={e => setCategory(e.target.value as Rule["category"])}
-          style={{ flex: 1, padding: "5px 8px", fontSize: 11 }}>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <WeightSlider value={weight} onChange={setWeight} disabled={false} />
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
+      <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)" rows={3}
+        style={{ padding: "6px 8px", fontSize: 12, resize: "vertical", width: "100%", marginBottom: 6 }} />
+      <select value={category} onChange={e => setCategory(e.target.value as Rule["category"])}
+        style={{ width: "100%", padding: "5px 8px", fontSize: 11, marginBottom: 4 }}>
+        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <WeightSlider value={weight} onChange={setWeight} disabled={false} />
+      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
         <button onClick={submit} disabled={!label.trim()}
           style={{ flex: 1, padding: "6px 0", background: label.trim() ? "var(--accent)" : "#374151", border: "none", color: label.trim() ? "#fff" : "#6b7280", borderRadius: 6, fontSize: 12, fontWeight: 600 }}>
           Add Rule
