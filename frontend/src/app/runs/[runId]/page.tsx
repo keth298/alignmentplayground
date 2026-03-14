@@ -33,7 +33,6 @@ export default function RunPage() {
   if (!run) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 12 }}>
-        <div style={{ fontSize: 32 }}>⚠️</div>
         <div style={{ color: "var(--text-muted)" }}>Run not found</div>
         <button onClick={() => router.push("/")} style={{ padding: "8px 16px", borderRadius: 8, background: "var(--accent)", border: "none", color: "#fff", cursor: "pointer" }}>
           Back to playground

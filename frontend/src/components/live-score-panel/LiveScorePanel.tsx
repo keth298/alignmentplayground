@@ -96,7 +96,7 @@ export default function LiveScorePanel({ metrics, baseline, isPending, onFreezeB
 
       {baseline && (
         <div style={{ fontSize: 10, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          📌 Baseline pinned · deltas shown above
+          Baseline pinned · deltas shown above
         </div>
       )}
     </aside>

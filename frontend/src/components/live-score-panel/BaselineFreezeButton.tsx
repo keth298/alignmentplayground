@@ -16,7 +16,7 @@ export default function BaselineFreezeButton({ onFreeze }: BaselineFreezeButtonP
         transition: 'all 0.15s',
       }}
     >
-      📌 Pin
+      Pin
     </button>
   );
 }

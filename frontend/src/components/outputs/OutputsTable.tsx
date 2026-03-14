@@ -109,8 +109,8 @@ function OutputRow({ output, baselineOutput }: { output: RunOutput; baselineOutp
             </div>
           )}
           <div style={{ marginTop: 8, display: "flex", gap: 16, alignItems: "center" }}>
-            {output.error && <span style={{ fontSize: 11, color: "var(--red)" }}>⚠ {output.error}</span>}
-            {output.cached && <span style={{ fontSize: 10, color: "#475569" }}>⚡ Cached</span>}
+            {output.error && <span style={{ fontSize: 11, color: "var(--red)" }}>{output.error}</span>}
+            {output.cached && <span style={{ fontSize: 10, color: "#475569" }}>Cached</span>}
           </div>
         </div>
       )}

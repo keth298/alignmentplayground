@@ -211,7 +211,6 @@ export default function Home() {
       }}>
         {/* Left: brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 18 }}>⚖️</span>
           <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
             Alignment Playground
           </span>
@@ -224,12 +223,12 @@ export default function Home() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           {error && (
             <span style={{ fontSize: 11, color: "var(--red)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              ⚠ {error}
+              {error}
             </span>
           )}
           {baseline && !error && (
             <span style={{ fontSize: 11, color: "#818cf8", background: "#6366f110", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>
-              📌 Baseline active
+              Baseline active
             </span>
           )}
 
@@ -252,8 +251,8 @@ export default function Home() {
                 cursor: isRunning ? "not-allowed" : "pointer", transition: "all 0.15s",
               }}>
                 {mode === "live"
-                  ? `⚡ Live${benchmarkStats ? ` (${benchmarkStats.live_count})` : ""}`
-                  : `🔬 Full${benchmarkStats ? ` (${benchmarkStats.full_count})` : ""}`}
+                  ? `Live${benchmarkStats ? ` (${benchmarkStats.live_count})` : ""}`
+                  : `Full${benchmarkStats ? ` (${benchmarkStats.full_count})` : ""}`}
               </button>
             ))}
           </div>
@@ -265,7 +264,7 @@ export default function Home() {
             color: showScorePanel ? "var(--accent-hover)" : "var(--text-muted)",
             fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", flexShrink: 0,
           }}>
-            📊
+            Scores
           </button>
 
           {/* Run button */}
@@ -335,7 +334,6 @@ export default function Home() {
           {isEmpty && !isRunning ? (
             /* ── Empty state ── */
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
-              <div style={{ fontSize: 52 }}>⚖️</div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10 }}>
                   No results yet
@@ -347,13 +345,8 @@ export default function Home() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 24, marginTop: 8 }}>
-                {[
-                  { icon: "🛡️", label: "Safety scoring" },
-                  { icon: "💬", label: "Helpfulness scoring" },
-                  { icon: "⚡", label: "Real-time results" },
-                ].map(({ icon, label }) => (
+                {["Safety scoring", "Helpfulness scoring", "Real-time results"].map(label => (
                   <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 24 }}>{icon}</span>
                     <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{label}</span>
                   </div>
                 ))}

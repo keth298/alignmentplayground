@@ -16,7 +16,7 @@ function WeightSlider({ value, onChange, disabled }: { value: number; onChange: 
         disabled={disabled}
         style={{ flex: 1, accentColor: "var(--accent)", height: 4, background: "transparent", border: "none" }}
       />
-      <span style={{ fontSize: 11, color: "#a5b4fc", width: 28, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ fontSize: 11, color: "#a5b4fc", width: 32, textAlign: "right", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
         {value.toFixed(2)}
       </span>
     </div>
@@ -103,8 +103,8 @@ function RuleCard({ rule, onToggle, onWeightChange, onDelete, onEdit, disabled }
 
         {!disabled && (
           <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-            <button onClick={() => setEditing(!editing)} title="Edit" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>✏️</button>
-            <button onClick={() => onDelete(rule.id)} title="Delete" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>🗑️</button>
+            <button onClick={() => setEditing(!editing)} title="Edit" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>Edit</button>
+            <button onClick={() => onDelete(rule.id)} title="Delete" style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 13, padding: "2px 3px" }}>Del</button>
           </div>
         )}
       </div>

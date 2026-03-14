@@ -16,7 +16,7 @@ function ScatterTooltip({ active, payload }: { active?: boolean; payload?: Array
       <div style={{ fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{d.prompt_id}</div>
       <div style={{ color: "var(--green)" }}>Helpfulness: {d.x?.toFixed(1)}/10</div>
       <div style={{ color: "var(--accent-hover)" }}>Safety: {d.y?.toFixed(1)}/10</div>
-      {d.refused && <div style={{ color: "var(--red)", marginTop: 4 }}>⛔ Refused</div>}
+      {d.refused && <div style={{ color: "var(--red)", marginTop: 4 }}>Refused</div>}
       <div style={{ color: "var(--text-muted)", marginTop: 4, fontSize: 11 }}>{d.category}</div>
     </div>
   );
