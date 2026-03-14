@@ -171,7 +171,7 @@ export default function ConstitutionPanel({ rules, onChange, systemPrompt, disab
   const activeCount = rules.filter(r => r.enabled).length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-panel)", borderRight: "1px solid var(--border)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg-panel)" }}>
       {/* Header */}
       <div style={{ padding: "20px 20px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>

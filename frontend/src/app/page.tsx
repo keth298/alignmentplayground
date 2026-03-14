@@ -17,7 +17,8 @@ function buildSystemPrompt(rules: Rule[]): string {
   return `You are a helpful AI assistant. Follow these rules in order of priority:\n\n${lines}\n\nAlways apply these rules consistently.`;
 }
 
-function runToMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | null {
+/** Build Metrics (0-1 scale) from a completed run or live scored outputs */
+function deriveMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | null {
   if (run?.avg_safety != null) {
     return {
       safety: run.avg_safety / 10,
@@ -29,28 +30,57 @@ function runToMetrics(run: Run | null, scoredOutputs: RunOutput[]): Metrics | nu
   }
   if (scoredOutputs.length > 0) {
     const n = scoredOutputs.length;
-    const safe = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+    const shouldAnswer = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
     return {
       safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / n / 10,
       helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / n / 10,
       refusal_rate: scoredOutputs.filter(o => o.refused).length / n,
-      false_refusal_rate: safe.length ? safe.filter(o => o.refused).length / safe.length : 0,
+      false_refusal_rate: shouldAnswer.length
+        ? shouldAnswer.filter(o => o.refused).length / shouldAnswer.length
+        : 0,
       policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / n / 10,
     };
   }
   return null;
 }
 
+/** Build a Run-shaped object from live outputs for MetricsCards */
+function buildLiveRun(scoredOutputs: RunOutput[], benchmarkMode: "live" | "full", progress: { completed: number; total: number }): Run {
+  const n = scoredOutputs.length;
+  const shouldAnswer = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
+  return {
+    id: "live", status: "running", benchmark_mode: benchmarkMode,
+    target_model: "", judge_mode: "fast",
+    total_prompts: progress.total, completed_prompts: progress.completed,
+    created_at: null, completed_at: null, ruleset: null,
+    avg_safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / n,
+    avg_helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / n,
+    avg_refusal_correctness: scoredOutputs.reduce((s, o) => s + (o.refusal_correctness ?? 0), 0) / n,
+    avg_policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / n,
+    refusal_rate: scoredOutputs.filter(o => o.refused).length / n,
+    false_refusal_rate: shouldAnswer.length ? shouldAnswer.filter(o => o.refused).length / shouldAnswer.length : 0,
+    overall_score: null,
+    category_metrics: null,
+  };
+}
+
 function ProgressBar({ completed, total }: { completed: number; total: number }) {
   const pct = total ? Math.round((completed / total) * 100) : 0;
   return (
-    <div style={{ padding: "10px 20px", flexShrink: 0 }}>
+    <div style={{ padding: "8px 20px 0", flexShrink: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 5 }}>
-        <span>Running benchmark…</span>
-        <span>{completed}/{total} · {pct}%</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "inline-block", animation: "spin 1s linear infinite", color: "var(--accent)" }}>◌</span>
+          Running benchmark…
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{completed}/{total} · {pct}%</span>
       </div>
-      <div style={{ height: 4, background: "var(--border)", borderRadius: 2 }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #6366f1, #8b5cf6)", borderRadius: 2, transition: "width 0.3s" }} />
+      <div style={{ height: 3, background: "var(--border)", borderRadius: 2 }}>
+        <div style={{
+          height: "100%", width: `${pct}%`,
+          background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+          borderRadius: 2, transition: "width 0.4s ease",
+        }} />
       </div>
     </div>
   );
@@ -69,6 +99,7 @@ export default function Home() {
   const [pinnedMetrics, setPinnedMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarTab, setSidebarTab] = useState<"rules" | "history">("rules");
+  const [showScorePanel, setShowScorePanel] = useState(true);
   const [benchmarkStats, setBenchmarkStats] = useState<{ live_count: number; full_count: number } | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
@@ -81,15 +112,24 @@ export default function Home() {
   const selectedRun = runs.find(r => r.id === selectedRunId) ?? null;
   const scoredOutputs = liveOutputs.filter(o => o.safety_score != null);
 
-  // Derive metrics for the live score panel
-  const liveMetrics = runToMetrics(selectedRun, scoredOutputs);
+  // Live metrics for the score panel — updates in real-time from scored outputs
+  const liveMetrics = deriveMetrics(
+    selectedRun?.avg_safety != null ? selectedRun : null,
+    scoredOutputs,
+  );
+
+  // Run to show in MetricsCards — use live build during active runs, completed run otherwise
+  const metricsRun: Run | null =
+    selectedRun?.avg_safety != null ? selectedRun
+    : scoredOutputs.length > 0 ? buildLiveRun(scoredOutputs, benchmarkMode, liveProgress)
+    : selectedRun; // pending, will show "—"
 
   const runBenchmark = async () => {
     if (isRunning) return;
     setError(null);
     setIsRunning(true);
     setLiveOutputs([]);
-    setLiveProgress({ completed: 0, total: benchmarkStats?.[`${benchmarkMode}_count`] ?? 0 });
+    setLiveProgress({ completed: 0, total: benchmarkStats?.[`${benchmarkMode}_count` as keyof typeof benchmarkStats] ?? 0 });
 
     try {
       const { run_id } = await api.createRun({ rules, benchmark_mode: benchmarkMode, judge_mode: "fast" });
@@ -98,7 +138,7 @@ export default function Home() {
       const newRun: Run = {
         id: run_id, status: "pending", benchmark_mode: benchmarkMode,
         target_model: "", judge_mode: "fast",
-        total_prompts: benchmarkStats?.[`${benchmarkMode}_count`] ?? 0,
+        total_prompts: benchmarkStats?.[`${benchmarkMode}_count` as keyof typeof benchmarkStats] ?? 0,
         completed_prompts: 0, created_at: new Date().toISOString(), completed_at: null,
         ruleset: null, avg_safety: null, avg_helpfulness: null,
         avg_refusal_correctness: null, avg_policy_consistency: null,
@@ -136,11 +176,7 @@ export default function Home() {
           es.close();
         }
       };
-
-      es.onerror = () => {
-        setIsRunning(false);
-        es.close();
-      };
+      es.onerror = () => { setIsRunning(false); es.close(); };
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start run");
       setIsRunning(false);
@@ -163,91 +199,83 @@ export default function Home() {
     if (liveMetrics) setPinnedMetrics(liveMetrics);
   }, [liveMetrics]);
 
-  const outputs = liveOutputs;
-  const isEmpty = outputs.length === 0;
-
-  // For MetricsCards — build a fakeRun from live outputs when no completed run is selected
-  const metricsRun: Run | null = selectedRun ?? (scoredOutputs.length > 0 ? {
-    id: "live", status: "running", benchmark_mode: benchmarkMode,
-    target_model: "", judge_mode: "fast", total_prompts: liveProgress.total,
-    completed_prompts: liveProgress.completed, created_at: null, completed_at: null,
-    ruleset: null,
-    avg_safety: scoredOutputs.reduce((s, o) => s + (o.safety_score ?? 0), 0) / scoredOutputs.length,
-    avg_helpfulness: scoredOutputs.reduce((s, o) => s + (o.helpfulness_score ?? 0), 0) / scoredOutputs.length,
-    avg_refusal_correctness: scoredOutputs.reduce((s, o) => s + (o.refusal_correctness ?? 0), 0) / scoredOutputs.length,
-    avg_policy_consistency: scoredOutputs.reduce((s, o) => s + (o.policy_consistency ?? 0), 0) / scoredOutputs.length,
-    refusal_rate: scoredOutputs.filter(o => o.refused).length / scoredOutputs.length,
-    false_refusal_rate: (() => {
-      const sa = scoredOutputs.filter(o => o.expected_behavior !== "refuse");
-      return sa.length ? sa.filter(o => o.refused).length / sa.length : 0;
-    })(),
-    overall_score: null,
-    category_metrics: null,
-  } : null);
+  const isEmpty = liveOutputs.length === 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* ── Header ── */}
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 24px", height: 52, background: "#0a0c14",
-        borderBottom: "1px solid var(--border)", flexShrink: 0, zIndex: 10,
+        padding: "0 20px", height: 52, background: "#080a12",
+        borderBottom: "1px solid var(--border)", flexShrink: 0, zIndex: 10, gap: 12,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 20 }}>⚖️</span>
-          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>Alignment Playground</span>
-          <span style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--border)", padding: "2px 7px", borderRadius: 4, fontWeight: 500, textTransform: "uppercase" }}>
+        {/* Left: brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 18 }}>⚖️</span>
+          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
+            Alignment Playground
+          </span>
+          <span style={{ fontSize: 9, color: "var(--text-muted)", background: "var(--border)", padding: "2px 6px", borderRadius: 3, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             v1.0
           </span>
-          {benchmarkStats && (
-            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
-              {benchmarkStats.live_count} live · {benchmarkStats.full_count} full prompts
-            </span>
-          )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {baseline && (
-            <span style={{ fontSize: 11, color: "#818cf8", background: "#6366f110", padding: "4px 10px", borderRadius: 6 }}>
-              📌 Baseline set · deltas shown
+        {/* Right: controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {error && (
+            <span style={{ fontSize: 11, color: "var(--red)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              ⚠ {error}
             </span>
           )}
-          {error && (
-            <span style={{ fontSize: 12, color: "var(--red)", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              ⚠ {error}
+          {baseline && !error && (
+            <span style={{ fontSize: 11, color: "#818cf8", background: "#6366f110", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>
+              📌 Baseline active
             </span>
           )}
 
           <a href="/compare" style={{
-            padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-active)",
+            padding: "5px 12px", borderRadius: 7, border: "1px solid var(--border-active)",
             fontSize: 12, fontWeight: 600, color: "var(--text-muted)",
-            background: "transparent", cursor: "pointer", textDecoration: "none",
+            background: "transparent", textDecoration: "none", flexShrink: 0,
+            transition: "all 0.15s",
           }}>
             ⇄ Compare
           </a>
 
-          {/* Mode toggle */}
-          <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
+          {/* Benchmark mode */}
+          <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 7, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
             {(["live", "full"] as const).map(mode => (
               <button key={mode} onClick={() => !isRunning && setBenchmarkMode(mode)} style={{
-                padding: "6px 14px", border: "none", fontSize: 12, fontWeight: 600,
+                padding: "5px 12px", border: "none", fontSize: 12, fontWeight: 600,
                 background: benchmarkMode === mode ? "var(--accent)" : "transparent",
                 color: benchmarkMode === mode ? "#fff" : "var(--text-muted)",
-                cursor: isRunning ? "not-allowed" : "pointer",
-                transition: "all 0.15s",
+                cursor: isRunning ? "not-allowed" : "pointer", transition: "all 0.15s",
               }}>
-                {mode === "live" ? `⚡ Live (${benchmarkStats?.live_count ?? "…"})` : `🔬 Full (${benchmarkStats?.full_count ?? "…"})`}
+                {mode === "live"
+                  ? `⚡ Live${benchmarkStats ? ` (${benchmarkStats.live_count})` : ""}`
+                  : `🔬 Full${benchmarkStats ? ` (${benchmarkStats.full_count})` : ""}`}
               </button>
             ))}
           </div>
 
+          {/* Score panel toggle */}
+          <button onClick={() => setShowScorePanel(p => !p)} title="Toggle score panel" style={{
+            padding: "5px 10px", borderRadius: 7, border: "1px solid var(--border-active)",
+            background: showScorePanel ? "#6366f120" : "transparent",
+            color: showScorePanel ? "var(--accent-hover)" : "var(--text-muted)",
+            fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", flexShrink: 0,
+          }}>
+            📊
+          </button>
+
+          {/* Run button */}
           <button onClick={runBenchmark} disabled={isRunning} style={{
-            padding: "8px 20px", borderRadius: 8, border: "none",
-            background: isRunning ? "#374151" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            color: isRunning ? "#6b7280" : "#fff",
-            fontSize: 13, fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", gap: 8,
-            boxShadow: isRunning ? "none" : "0 0 20px var(--accent-glow)",
+            padding: "7px 18px", borderRadius: 7, border: "none", flexShrink: 0,
+            background: isRunning ? "#1e2234" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            color: isRunning ? "#64748b" : "#fff",
+            fontSize: 13, fontWeight: 700, cursor: isRunning ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: 7,
+            boxShadow: isRunning ? "none" : "0 0 16px #6366f140",
             transition: "all 0.2s",
           }}>
             {isRunning
@@ -259,8 +287,10 @@ export default function Home() {
 
       {/* ── Body ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Left sidebar */}
-        <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
+
+        {/* ── Left sidebar ── */}
+        <div style={{ width: 288, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border)" }}>
+          {/* Tab strip */}
           <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             {(["rules", "history"] as const).map(tab => (
               <button key={tab} onClick={() => setSidebarTab(tab)} style={{
@@ -270,7 +300,7 @@ export default function Home() {
                 borderBottom: sidebarTab === tab ? "2px solid var(--accent)" : "2px solid transparent",
                 transition: "all 0.15s",
               }}>
-                {tab === "rules" ? "Constitution" : "History"}
+                {tab === "rules" ? "Constitution" : `History${runs.length > 0 ? ` (${runs.length})` : ""}`}
               </button>
             ))}
           </div>
@@ -283,7 +313,6 @@ export default function Home() {
               disabled={isRunning}
             />
           </div>
-
           <div style={{ flex: 1, overflowY: "auto", display: sidebarTab === "history" ? "block" : "none" }}>
             <RunHistory
               runs={runs}
@@ -295,48 +324,77 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main panel */}
-        <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+        {/* ── Main panel ── */}
+        <div style={{ flex: 1, minWidth: 0, overflow: "auto", display: "flex", flexDirection: "column" }}>
           {isRunning && (
-            <ProgressBar completed={liveProgress.completed} total={liveProgress.total} />
+            <div style={{ padding: "10px 20px 12px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <ProgressBar completed={liveProgress.completed} total={liveProgress.total} />
+            </div>
           )}
 
           {isEmpty && !isRunning ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "var(--text-faint)" }}>
-              <div style={{ fontSize: 56 }}>⚖️</div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-muted)" }}>No results yet</div>
-              <div style={{ fontSize: 13, color: "var(--text-faint)", textAlign: "center", maxWidth: 320, lineHeight: 1.6 }}>
-                Toggle alignment rules on the left, select a benchmark mode, then click <strong style={{ color: "var(--text-secondary)" }}>Run Benchmark</strong> to see tradeoff curves here.
+            /* ── Empty state ── */
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 40 }}>
+              <div style={{ fontSize: 52 }}>⚖️</div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10 }}>
+                  No results yet
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", maxWidth: 340, lineHeight: 1.7 }}>
+                  Toggle alignment rules in the <strong style={{ color: "var(--text-muted)" }}>Constitution</strong> panel,
+                  choose a benchmark mode, then click{" "}
+                  <strong style={{ color: "var(--accent-hover)" }}>Run Benchmark</strong>.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 24, marginTop: 8 }}>
+                {[
+                  { icon: "🛡️", label: "Safety scoring" },
+                  { icon: "💬", label: "Helpfulness scoring" },
+                  { icon: "⚡", label: "Real-time results" },
+                ].map(({ icon, label }) => (
+                  <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 24 }}>{icon}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{label}</span>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
-            <div style={{ padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
-              {metricsRun && <MetricsCards run={metricsRun} baseline={baseline} />}
+            /* ── Results ── */
+            <div style={{ padding: "18px 20px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+              {metricsRun && (
+                <MetricsCards run={metricsRun} baseline={baseline} />
+              )}
 
               {scoredOutputs.length > 0 && (
                 <>
                   <SafetyHelpfulnessScatter outputs={scoredOutputs} />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
                     <CategoryRadar outputs={scoredOutputs} />
                     <RefusalRateBar outputs={scoredOutputs} />
                   </div>
                 </>
               )}
 
-              {outputs.length > 0 && (
-                <OutputsTable outputs={outputs} baselineOutputs={baselineOutputs.length > 0 ? baselineOutputs : undefined} />
+              {liveOutputs.length > 0 && (
+                <OutputsTable
+                  outputs={liveOutputs}
+                  baselineOutputs={baselineOutputs.length > 0 ? baselineOutputs : undefined}
+                />
               )}
             </div>
           )}
         </div>
 
-        {/* Right panel — Live Score Panel */}
-        <LiveScorePanel
-          metrics={liveMetrics}
-          baseline={pinnedMetrics}
-          isPending={isRunning}
-          onFreezeBaseline={handleFreezeBaseline}
-        />
+        {/* ── Right panel: Live Score Panel ── */}
+        {showScorePanel && (
+          <LiveScorePanel
+            metrics={liveMetrics}
+            baseline={pinnedMetrics}
+            isPending={isRunning}
+            onFreezeBaseline={handleFreezeBaseline}
+          />
+        )}
       </div>
     </div>
   );

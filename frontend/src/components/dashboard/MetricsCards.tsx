@@ -2,39 +2,59 @@
 
 import type { Run } from "@/lib/types";
 
-function StatCard({ label, value, sub, color, delta }: {
+function StatCard({ label, value, sub, color, delta, pct }: {
   label: string;
   value: string | number;
   sub?: string;
   color: string;
   delta?: number | null;
+  pct?: number | null; // 0-100 for progress bar
 }) {
-  const deltaColor = delta != null ? (delta > 0 ? "#22c55e" : delta < 0 ? "#ef4444" : "#64748b") : undefined;
-  const sign = delta != null && delta > 0 ? "+" : "";
+  const deltaPos = delta != null && delta > 0;
+  const deltaNeg = delta != null && delta < 0;
+  const sign = deltaPos ? "+" : "";
 
   return (
     <div style={{
       background: "var(--bg-card)",
       border: "1px solid var(--border-active)",
       borderRadius: 10,
-      padding: "14px 18px",
+      padding: "13px 16px",
       flex: 1,
-      minWidth: 140,
+      minWidth: 130,
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
     }}>
-      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+      <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
         {label}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <div style={{ fontSize: 26, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
           {value}
         </div>
         {delta != null && (
-          <div style={{ fontSize: 12, fontWeight: 600, color: deltaColor }}>
-            {sign}{typeof delta === "number" ? delta.toFixed(2) : delta}
+          <div style={{
+            fontSize: 11, fontWeight: 700,
+            color: deltaPos ? "#22c55e" : deltaNeg ? "#ef4444" : "#64748b",
+          }}>
+            {sign}{typeof delta === "number" ? delta.toFixed(1) : delta}
           </div>
         )}
       </div>
-      {sub && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>{sub}</div>}
+      {pct != null && (
+        <div style={{ height: 3, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: `${Math.min(100, Math.max(0, pct))}%`,
+            background: color,
+            borderRadius: 2,
+            transition: "width 0.6s ease",
+            opacity: 0.7,
+          }} />
+        </div>
+      )}
+      {sub && <div style={{ fontSize: 10, color: "var(--text-faint)" }}>{sub}</div>}
     </div>
   );
 }
@@ -55,18 +75,64 @@ export default function MetricsCards({ run, baseline }: Props) {
 
   const bSafe = baseline?.avg_safety ?? null;
   const bHelp = baseline?.avg_helpfulness ?? null;
-  const bRefusal = baseline?.refusal_rate != null ? baseline.refusal_rate * 100 : null;
-  const bFalseRefusal = baseline?.false_refusal_rate != null ? baseline.false_refusal_rate * 100 : null;
+  const bRefusal = baseline?.refusal_rate != null ? Math.round(baseline.refusal_rate * 100) : null;
+  const bFalseRefusal = baseline?.false_refusal_rate != null ? Math.round(baseline.false_refusal_rate * 100) : null;
 
   return (
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <StatCard label="Overall Score" value={overall != null ? overall.toFixed(1) : "—"} sub="weighted composite" color="var(--accent-hover)" />
-      <StatCard label="Safety" value={safe != null ? safe.toFixed(1) : "—"} sub="avg 0–10" color="#6366f1" delta={safe != null && bSafe != null ? safe - bSafe : null} />
-      <StatCard label="Helpfulness" value={help != null ? help.toFixed(1) : "—"} sub="avg 0–10" color="var(--green)" delta={help != null && bHelp != null ? help - bHelp : null} />
-      <StatCard label="Refusal Rate" value={refusal != null ? `${refusal}%` : "—"} sub="of all prompts" color={refusal != null && refusal > 40 ? "#ef4444" : refusal != null && refusal > 20 ? "#f59e0b" : "#22c55e"} delta={refusal != null && bRefusal != null ? refusal - bRefusal : null} />
-      <StatCard label="False Refusals" value={falseRefusal != null ? `${falseRefusal}%` : "—"} sub="safe prompts refused" color={falseRefusal != null && falseRefusal > 20 ? "#ef4444" : "#f59e0b"} delta={falseRefusal != null && bFalseRefusal != null ? falseRefusal - bFalseRefusal : null} />
-      <StatCard label="Refusal Accuracy" value={rc != null ? rc.toFixed(1) : "—"} sub="correct refusal decisions" color="#f59e0b" />
-      <StatCard label="Policy Follow" value={pc != null ? pc.toFixed(1) : "—"} sub="rule adherence" color="#8b5cf6" />
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <StatCard
+        label="Overall"
+        value={overall != null ? overall.toFixed(1) : "—"}
+        sub="weighted composite"
+        color="var(--accent-hover)"
+        pct={overall != null ? overall * 10 : null}
+      />
+      <StatCard
+        label="Safety"
+        value={safe != null ? safe.toFixed(1) : "—"}
+        sub="avg 0–10"
+        color="#818cf8"
+        delta={safe != null && bSafe != null ? safe - bSafe : null}
+        pct={safe != null ? safe * 10 : null}
+      />
+      <StatCard
+        label="Helpfulness"
+        value={help != null ? help.toFixed(1) : "—"}
+        sub="avg 0–10"
+        color="#22c55e"
+        delta={help != null && bHelp != null ? help - bHelp : null}
+        pct={help != null ? help * 10 : null}
+      />
+      <StatCard
+        label="Refusal Rate"
+        value={refusal != null ? `${refusal}%` : "—"}
+        sub="of all prompts"
+        color={refusal != null && refusal > 40 ? "#ef4444" : refusal != null && refusal > 20 ? "#f59e0b" : "#22c55e"}
+        delta={refusal != null && bRefusal != null ? refusal - bRefusal : null}
+        pct={refusal}
+      />
+      <StatCard
+        label="False Refusals"
+        value={falseRefusal != null ? `${falseRefusal}%` : "—"}
+        sub="safe prompts refused"
+        color={falseRefusal != null && falseRefusal > 20 ? "#ef4444" : "#f59e0b"}
+        delta={falseRefusal != null && bFalseRefusal != null ? falseRefusal - bFalseRefusal : null}
+        pct={falseRefusal}
+      />
+      <StatCard
+        label="Refusal Acc."
+        value={rc != null ? rc.toFixed(1) : "—"}
+        sub="correct decisions"
+        color="#f59e0b"
+        pct={rc != null ? rc * 10 : null}
+      />
+      <StatCard
+        label="Policy Follow"
+        value={pc != null ? pc.toFixed(1) : "—"}
+        sub="rule adherence"
+        color="#8b5cf6"
+        pct={pc != null ? pc * 10 : null}
+      />
     </div>
   );
 }
