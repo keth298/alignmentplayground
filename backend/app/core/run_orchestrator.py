@@ -8,8 +8,10 @@ from app.benchmarks.loaders import get_prompts
 from app.config import settings
 from app.core.metrics_aggregator import aggregate_outputs
 from app.core.prompt_builder import build_system_prompt, hash_ruleset
-from app.models.claude_client import complete
+from app.models.claude_client import complete, complete_with_tools
+from app.models.tools import TOOLS
 from app.scoring.judge_runner import score_response
+from app.scoring.tool_call_scorer import TOOL_CALL_BEHAVIORS, score_tool_call
 from app.storage.cache import cache_get, cache_set, model_output_key
 from app.storage.database import AsyncSessionLocal
 from app.storage.models import Output
@@ -42,17 +44,31 @@ async def _run_single_prompt(
         expected_behavior=prompt_data["expected_behavior"],
     )
 
-    # Check model output cache
-    model_cache_key = model_output_key(target_model, ruleset_hash, pid)
+    is_tool_prompt = prompt_data.get("expected_behavior") in TOOL_CALL_BEHAVIORS
+    cache_suffix = "_tool" if is_tool_prompt else ""
+    model_cache_key = model_output_key(target_model, ruleset_hash, pid) + cache_suffix
     cached_response = await cache_get(model_cache_key)
+
+    tool_calls_made: list[dict] = []
 
     if cached_response:
         response = cached_response["response"]
+        tool_calls_made = cached_response.get("tool_calls", [])
         output.cached = True
     else:
         try:
-            response = await complete(prompt_data["prompt"], system_prompt, target_model, max_tokens=512)
-            await cache_set(model_cache_key, {"response": response})
+            if is_tool_prompt:
+                result = await complete_with_tools(
+                    prompt_data["prompt"], system_prompt, target_model, TOOLS, max_tokens=512
+                )
+                response = result["content"] or (
+                    f"[tool call: {result['tool_calls']}]" if result["tool_calls"] else ""
+                )
+                tool_calls_made = result["tool_calls"]
+                await cache_set(model_cache_key, {"response": response, "tool_calls": tool_calls_made})
+            else:
+                response = await complete(prompt_data["prompt"], system_prompt, target_model, max_tokens=512)
+                await cache_set(model_cache_key, {"response": response})
         except Exception as e:
             logger.error("Model call failed for %s: %s", pid, e)
             output.error = str(e)
@@ -60,12 +76,30 @@ async def _run_single_prompt(
 
     output.response = response
 
-    # Score the response
+    if is_tool_prompt:
+        output.tool_calls_made = tool_calls_made
+        tool_scores = score_tool_call(
+            actual_tool_calls=tool_calls_made,
+            expected_behavior=prompt_data["expected_behavior"],
+            expected_tool=prompt_data.get("expected_tool"),
+            expected_args=prompt_data.get("expected_args"),
+            response_text=response,
+        )
+        output.tool_call_accuracy = tool_scores["tool_call_accuracy"]
+        output.judge_reasoning = tool_scores["reasoning"]
+        # Map refuse_tool_call → "refuse" for regular judge scoring
+        judge_expected = (
+            "refuse" if prompt_data["expected_behavior"] == "refuse_tool_call" else "helpful"
+        )
+    else:
+        judge_expected = prompt_data["expected_behavior"]
+
+    # Score with judge (applies to all prompts)
     try:
         scores = await score_response(
             prompt=prompt_data["prompt"],
             response=response,
-            expected_behavior=prompt_data["expected_behavior"],
+            expected_behavior=judge_expected,
             prompt_id=pid,
             rules_summary=rules_summary,
         )
@@ -74,7 +108,8 @@ async def _run_single_prompt(
         output.refusal_correctness = scores["refusal_correctness"]
         output.policy_consistency = scores["policy_consistency"]
         output.refused = scores["refused"]
-        output.judge_reasoning = scores["reasoning"]
+        if not is_tool_prompt:
+            output.judge_reasoning = scores["reasoning"]
     except Exception as e:
         logger.error("Scoring failed for %s: %s", pid, e)
         output.error = f"Scoring error: {e}"
@@ -123,6 +158,7 @@ async def execute_run(run_id: str, rules: list[dict], benchmark_mode: str, targe
             "avg_helpfulness": metrics.get("avg_helpfulness"),
             "avg_refusal_correctness": metrics.get("avg_refusal_correctness"),
             "avg_policy_consistency": metrics.get("avg_policy_consistency"),
+            "avg_tool_call_accuracy": metrics.get("avg_tool_call_accuracy"),
             "refusal_rate": metrics.get("refusal_rate"),
             "false_refusal_rate": metrics.get("false_refusal_rate"),
             "overall_score": metrics.get("overall_score"),

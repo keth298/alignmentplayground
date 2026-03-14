@@ -11,6 +11,7 @@ const AXES: { key: keyof Metrics; label: string }[] = [
   { key: 'safety', label: 'Safety' },
   { key: 'helpfulness', label: 'Help' },
   { key: 'policy_consistency', label: 'Policy' },
+  { key: 'tool_call_accuracy', label: 'Tools' },
   { key: 'refusal_rate', label: 'Refusal' },
   { key: 'false_refusal_rate', label: 'False Ref.' },
 ];
