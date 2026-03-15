@@ -4,6 +4,11 @@ import { useState } from "react";
 import type { GeneratedPrompt, Rule } from "@/lib/types";
 import { api } from "@/lib/api";
 
+const RULE_CATEGORIES: Rule["category"][] = ["safety", "helpfulness", "restriction", "style"];
+const CATEGORY_COLORS: Record<Rule["category"], string> = {
+  safety: "#818cf8", helpfulness: "#22c55e", restriction: "#f59e0b", style: "#06b6d4",
+};
+
 const GROQ_MODELS = [
   { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
   { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
@@ -28,6 +33,7 @@ const EXPECTED_LABEL: Record<string, string> = {
 
 interface SetupScreenProps {
   rules: Rule[];
+  onChangeRules: (rules: Rule[]) => void;
   onRun: (opts: {
     description: string;
     targetModel: string;
@@ -37,17 +43,42 @@ interface SetupScreenProps {
   }) => void;
 }
 
-export default function SetupScreen({ rules, onRun }: SetupScreenProps) {
+export default function SetupScreen({ rules, onChangeRules, onRun }: SetupScreenProps) {
   const [description, setDescription] = useState("");
   const [targetModel, setTargetModel] = useState(GROQ_MODELS[0].value);
   const [baselineModel, setBaselineModel] = useState("");
   const [generatorModel, setGeneratorModel] = useState("llama-3.1-8b-instant");
+  const [showAddRule, setShowAddRule] = useState(false);
+  const [newRuleLabel, setNewRuleLabel] = useState("");
+  const [newRuleDesc, setNewRuleDesc] = useState("");
+  const [newRuleCat, setNewRuleCat] = useState<Rule["category"]>("safety");
   const [generatedPrompts, setGeneratedPrompts] = useState<GeneratedPrompt[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
 
   const canGenerate = description.trim().length > 10;
+
+  const toggleRule = (id: string) =>
+    onChangeRules(rules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+
+  const deleteRule = (id: string) =>
+    onChangeRules(rules.filter(r => r.id !== id));
+
+  const addRule = () => {
+    if (!newRuleLabel.trim()) return;
+    onChangeRules([...rules, {
+      id: `custom_${Date.now()}`,
+      label: newRuleLabel.trim(),
+      description: newRuleDesc.trim() || newRuleLabel.trim(),
+      enabled: true,
+      weight: 0.8,
+      category: newRuleCat,
+    }]);
+    setNewRuleLabel("");
+    setNewRuleDesc("");
+    setShowAddRule(false);
+  };
 
   const handleGenerate = async () => {
     if (!canGenerate || isGenerating) return;
@@ -156,27 +187,115 @@ export default function SetupScreen({ rules, onRun }: SetupScreenProps) {
           </div>
         </section>
 
-        {/* Step 3: Rules summary */}
+        {/* Step 3: Rules */}
         <section style={{ background: "var(--bg-card)", borderRadius: 12, border: "1px solid var(--border)", padding: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 14 }}>
-            3 · Active rules ({rules.filter(r => r.enabled).length} enabled)
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              3 · Alignment rules ({rules.filter(r => r.enabled).length} / {rules.length} enabled)
+            </div>
+            <button
+              onClick={() => setShowAddRule(v => !v)}
+              style={{
+                padding: "4px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                background: "transparent", color: "var(--text-muted)", fontSize: 11,
+                fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              {showAddRule ? "Cancel" : "+ Add rule"}
+            </button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+
+          {/* Add rule form */}
+          {showAddRule && (
+            <div style={{ marginBottom: 14, padding: 14, borderRadius: 8, background: "var(--bg-base)", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                value={newRuleLabel}
+                onChange={e => setNewRuleLabel(e.target.value)}
+                placeholder="Rule name (e.g. Never execute transactions)"
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: 12 }}
+              />
+              <input
+                value={newRuleDesc}
+                onChange={e => setNewRuleDesc(e.target.value)}
+                placeholder="Description (optional)"
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", fontSize: 12 }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={newRuleCat}
+                  onChange={e => setNewRuleCat(e.target.value as Rule["category"])}
+                  style={{ flex: 1, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-secondary)", fontSize: 12 }}
+                >
+                  {RULE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button
+                  onClick={addRule}
+                  disabled={!newRuleLabel.trim()}
+                  style={{
+                    padding: "6px 16px", borderRadius: 6, border: "none",
+                    background: newRuleLabel.trim() ? "#6366f1" : "var(--border)",
+                    color: newRuleLabel.trim() ? "#fff" : "#64748b",
+                    fontSize: 12, fontWeight: 600, cursor: newRuleLabel.trim() ? "pointer" : "not-allowed",
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Rule list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {rules.length === 0 ? (
-              <span style={{ fontSize: 12, color: "var(--text-faint)" }}>No rules loaded yet.</span>
+              <span style={{ fontSize: 12, color: "var(--text-faint)" }}>No rules yet — add one above.</span>
             ) : rules.map(r => (
-              <span key={r.id} style={{
-                padding: "4px 10px", borderRadius: 5, fontSize: 11, fontWeight: 500,
-                background: r.enabled ? "#6366f115" : "var(--bg-base)",
-                color: r.enabled ? "#a5b4fc" : "var(--text-faint)",
+              <div key={r.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 12px", borderRadius: 8,
                 border: `1px solid ${r.enabled ? "#6366f130" : "var(--border)"}`,
+                background: r.enabled ? "#6366f108" : "transparent",
+                transition: "all 0.15s",
               }}>
-                {r.label}
-              </span>
+                {/* Toggle */}
+                <button
+                  onClick={() => toggleRule(r.id)}
+                  style={{
+                    flexShrink: 0, width: 38, padding: "2px 6px", borderRadius: 4,
+                    border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer",
+                    background: r.enabled ? "#6366f1" : "var(--border)",
+                    color: r.enabled ? "#fff" : "#64748b",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {r.enabled ? "ON" : "OFF"}
+                </button>
+                {/* Category dot */}
+                <span style={{
+                  flexShrink: 0, width: 7, height: 7, borderRadius: "50%",
+                  background: CATEGORY_COLORS[r.category] ?? "#6b7280", display: "inline-block",
+                }} />
+                {/* Label */}
+                <span style={{ flex: 1, fontSize: 12, color: r.enabled ? "var(--text-secondary)" : "var(--text-faint)", fontWeight: 500 }}>
+                  {r.label}
+                </span>
+                {r.description && r.description !== r.label && (
+                  <span style={{ fontSize: 10, color: "var(--text-faint)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {r.description}
+                  </span>
+                )}
+                {/* Delete */}
+                <button
+                  onClick={() => deleteRule(r.id)}
+                  style={{
+                    flexShrink: 0, background: "transparent", border: "none",
+                    color: "var(--text-faint)", fontSize: 14, cursor: "pointer", lineHeight: 1,
+                    padding: "0 2px",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             ))}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 10 }}>
-            Rules are configured in the Playground. The prompt generator uses these to craft relevant edge cases.
           </div>
         </section>
 

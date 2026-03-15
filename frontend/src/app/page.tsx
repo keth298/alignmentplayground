@@ -297,7 +297,7 @@ export default function Home() {
   const isEmpty = liveOutputs.length === 0;
 
   if (appStep === "setup") {
-    return <SetupScreen rules={rules} onRun={handleSetupComplete} />;
+    return <SetupScreen rules={rules} onChangeRules={setRules} onRun={handleSetupComplete} />;
   }
 
   return (
@@ -502,7 +502,11 @@ export default function Home() {
             /* ── Results ── */
             <div style={{ padding: "18px 20px 28px", display: "flex", flexDirection: "column", gap: 20 }}>
               {metricsRun && (
-                <MetricsCards run={metricsRun} baseline={baseline} />
+                <MetricsCards
+                  run={metricsRun}
+                  baseline={baseline}
+                  baselineModelName={baselineModelSel || null}
+                />
               )}
 
               {scoredOutputs.length > 0 && (
