@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "alignment-playground-b018a",
+  "private_key_id": "cb55db30d64e5938827ff5b58b13e78ec4e27bba",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC5UbV3RgtgDMUu\nktSHwxJHFcA6rwBiQq83Bmv3uu6HipG32DGO9slundgWNc5iWRGZcOh0PoIxn8Fa\nq1lI0skwrVeX7nHfwLyhf+FKcv2ZOzTLQqr+cexDXKqgrE2lZkcTlle3dcLHw1Ou\nZB2gJrH8/4/r+LzuOuSwSzbkr5IISkFNrUr7QOwUY4nPMg//BCf0e9YR+UrO13fD\nZ+yhUrnw87wIoFv2jE3qBdrQqMyPDCCpE5LPyEGg9XLipmV6GgqnXXpEjAn2+brq\ni/WTVezZF6xVT4b7BknfVC9lBoM2FItUNxojfyLKE2C2mOzYk/842mZXTQgCmFI9\nvNe5/XLPAgMBAAECggEAFKH/nZX+MjrPFrkLp0nqwQtaPwO4++Jcy7g6pnb46RJe\ngvozxQJpDu3NXzutDM90jCxBVUqYXZoMgbcjgQjRlEqDFCFc1a1fKG6qe2AuKAoA\nKMP1cdA78+FfW0rpIjSETq6lztac/HdyMQUTNKovlZwxPp6PunPIKRtWs0Nw84cl\nqZ9Y4IFeUL/0bQsn4yusHx9glXPiiWZeRdLPzrK4VN3N3KCPybBaV1kIcIpjivuK\nFidfpKdzSCYDye2ynl8BIjjvbMDZ1OflGUoUpuoxiE+cfwCDqRC7G8PcAqTFJVcF\n4b2D2WGOs12wQFCuOOzH8TJ/TeP0QyWcL7K6gDigwQKBgQDonLjTtBbIwfNAWXU1\noeAb1fh7cGcwzZUOQBIbW8oVzfrzDcJIhy3fvyzZZLQPjxY3fexKk+LeBCio9Zpg\n9vn69+n7oRfN9ix3NH2ieSu70BbYImx+AQYrZIj78gmUA7f59AuH6xdSZLtiz5rO\ncSPGZtyzXBIN0/b5RiYTTAFBcQKBgQDL87JxV5lTvAiVKSC3tldRpvZxCGASSbxU\npIit+GxBujRnOCgu6LujG9R/sbLGxoA/Iupz5soYeb14giyUix1FmjABI/J+phsy\n4DWlDE/VTnora7YyfA6FYHhE4VYmZHrQjDvvWZfIjSOovYlupPz5V2nn1BQlIjz7\ngLy+wmfYPwKBgQC8qS/29J9uIHBMhsHbx/jeWsL4SwhGutbkAe8tpVrYKIIa09P5\nwznfuUyE3Xp1DBZ213joW92rODBKKTkW3/mMJbruzY9jCwCxhi9HsYNZBsMgdXsN\nD4OTeizoOzytgf6bieY4TOJTf0PENqFWQslDR3ZFOq2h7YLoVo7XI9P44QKBgBMm\nvRjbivBL9dpb1FCr9KMcNIQEr1DIT8D6+kKr0y6Q157hrRRKkmQMlvWusATuWtiS\n5MUhZNTLibkpMBp6vbLteZiB0aGG44LxftgSweRbzCkLoj43W/22Q1Tke/x67vVq\nVa5yEUipyDFuKtuS7pZTWQSF66ZZArTzL8YR50JtAoGBAKbCP7pOav6HvWnTg/Gz\nXJqKvAFDpZNwAIuhSParsybdH40SzI0yc/v7Wu/0wQ3osMI/l18hd1JkWTVI23O4\nnXX9J/UrYeGy+JXkFN2lAQlpS055sMILQ0ES4uYh4xLxdkv0ST6uSGbMVmHBcTF5\nAxfvY6rhNpFLsLK45M5lJFs0\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@alignment-playground-b018a.iam.gserviceaccount.com",
+  "client_id": "104747295339574987172",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40alignment-playground-b018a.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

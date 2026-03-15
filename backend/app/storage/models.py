@@ -56,6 +56,8 @@ class Run:
     false_refusal_rate: float | None = None
     overall_score: float | None = None
     category_metrics: dict | None = None
+    baseline_model: str | None = None
+    baseline_metrics: dict | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     completed_at: datetime | None = None
     # Populated after load — not stored in Firestore
@@ -80,6 +82,8 @@ class Run:
             "false_refusal_rate": self.false_refusal_rate,
             "overall_score": self.overall_score,
             "category_metrics": self.category_metrics,
+            "baseline_model": self.baseline_model,
+            "baseline_metrics": self.baseline_metrics,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
         }
@@ -104,6 +108,8 @@ class Run:
             false_refusal_rate=data.get("false_refusal_rate"),
             overall_score=data.get("overall_score"),
             category_metrics=data.get("category_metrics"),
+            baseline_model=data.get("baseline_model"),
+            baseline_metrics=data.get("baseline_metrics"),
             created_at=data.get("created_at", datetime.utcnow()),
             completed_at=data.get("completed_at"),
         )

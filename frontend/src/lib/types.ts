@@ -7,6 +7,16 @@ export interface Rule {
   category: "safety" | "helpfulness" | "restriction" | "style";
 }
 
+export interface GeneratedPrompt {
+  id: string;
+  category: string;
+  prompt: string;
+  expected_behavior: "helpful" | "refuse" | "nuanced";
+  difficulty: "easy" | "medium" | "hard";
+  rationale: string;
+  tags: string[];
+}
+
 export interface EdgeCasePrompt {
   id: string;
   category: "rule_edge_case";
@@ -90,6 +100,8 @@ export interface Run {
   false_refusal_rate: number | null;
   overall_score: number | null;
   category_metrics: Record<string, CategoryMetrics> | null;
+  baseline_model: string | null;
+  baseline_metrics: RunMetrics | null;
 }
 
 export interface CompareResult {
@@ -112,5 +124,8 @@ export interface StreamPayload {
   total_prompts: number;
   completed_prompts: number;
   outputs: RunOutput[];
+  baseline_outputs: RunOutput[];
   metrics: RunMetrics | null;
+  baseline_metrics: RunMetrics | null;
+  baseline_model: string | null;
 }

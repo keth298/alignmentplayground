@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 RULESETS = "rulesets"
 RUNS = "runs"
 OUTPUTS = "outputs"
+BASELINE_OUTPUTS = "baseline_outputs"
 
 
 # ── Rulesets ──────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ async def create_run(
     target_model: str,
     judge_mode: str,
     total_prompts: int,
+    baseline_model: str | None = None,
 ) -> Run:
     db = get_firestore()
     run = Run(
@@ -42,6 +44,7 @@ async def create_run(
         judge_mode=judge_mode,
         status="pending",
         total_prompts=total_prompts,
+        baseline_model=baseline_model,
     )
     await db.collection(RUNS).document(run.id).set(run.to_dict())
     return run
@@ -109,6 +112,20 @@ async def save_output(output: Output) -> None:
 async def get_run_outputs(run_id: str) -> list[Output]:
     db = get_firestore()
     query = db.collection(OUTPUTS).where("run_id", "==", run_id)
+    outputs: list[Output] = []
+    async for doc in query.stream():
+        outputs.append(Output.from_dict(doc.to_dict()))
+    return outputs
+
+
+async def save_baseline_output(output: Output) -> None:
+    db = get_firestore()
+    await db.collection(BASELINE_OUTPUTS).document(output.id).set(output.to_dict())
+
+
+async def get_baseline_outputs(run_id: str) -> list[Output]:
+    db = get_firestore()
+    query = db.collection(BASELINE_OUTPUTS).where("run_id", "==", run_id)
     outputs: list[Output] = []
     async for doc in query.stream():
         outputs.append(Output.from_dict(doc.to_dict()))

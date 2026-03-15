@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import benchmarks, compare, health, rules, runs
+from app.api.routes import benchmarks, compare, health, prompts, rules, runs
 from app.storage.database import init_firebase
 
 
@@ -27,3 +27,4 @@ app.include_router(rules.router, prefix="/api/rules", tags=["rules"])
 app.include_router(benchmarks.router, prefix="/api/benchmarks", tags=["benchmarks"])
 app.include_router(runs.router, prefix="/api/runs", tags=["runs"])
 app.include_router(compare.router, prefix="/api/compare", tags=["compare"])
+app.include_router(prompts.router, prefix="/api/prompts", tags=["prompts"])

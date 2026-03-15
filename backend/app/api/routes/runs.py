@@ -9,6 +9,7 @@ from typing import AsyncGenerator
 from app.config import settings
 from app.core.run_orchestrator import create_and_start_run
 from app.storage.repositories.run_repository import (
+    get_baseline_outputs,
     get_run,
     get_run_outputs,
     list_runs,
@@ -21,8 +22,10 @@ class RunRequest(BaseModel):
     rules: list[dict]
     benchmark_mode: str = "live"  # live | full
     target_model: str | None = None
+    baseline_model: str | None = None
     judge_mode: str = "fast"  # fast | strong
     scoring_weights: dict | None = None
+    custom_prompts: list[dict] | None = None
 
 
 def _serialize_run(run) -> dict:
@@ -45,6 +48,8 @@ def _serialize_run(run) -> dict:
         "category_metrics": run.category_metrics,
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "baseline_model": run.baseline_model,
+        "baseline_metrics": run.baseline_metrics,
         "ruleset": {
             "id": run.ruleset.id,
             "hash": run.ruleset.hash,
@@ -82,6 +87,8 @@ async def create_run_endpoint(req: RunRequest):
         benchmark_mode=req.benchmark_mode,
         target_model=model,
         judge_mode=req.judge_mode,
+        baseline_model=req.baseline_model or None,
+        custom_prompts=req.custom_prompts or None,
     )
     return {"run_id": run_id, "status": "started"}
 
@@ -109,6 +116,15 @@ async def get_outputs(run_id: str):
     return [_serialize_output(o) for o in outputs]
 
 
+@router.get("/{run_id}/baseline-outputs")
+async def get_baseline_outputs_endpoint(run_id: str):
+    run = await get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    outputs = await get_baseline_outputs(run_id)
+    return [_serialize_output(o) for o in outputs]
+
+
 @router.get("/{run_id}/stream")
 async def stream_run(run_id: str):
     """Server-sent events stream for real-time run progress."""
@@ -123,11 +139,13 @@ async def stream_run(run_id: str):
 
             if run.completed_prompts != last_completed or run.status in ("completed", "failed"):
                 outputs = await get_run_outputs(run_id)
+                b_outputs = await get_baseline_outputs(run_id) if run.baseline_model else []
                 payload = {
                     "status": run.status,
                     "total_prompts": run.total_prompts,
                     "completed_prompts": run.completed_prompts,
                     "outputs": [_serialize_output(o) for o in outputs],
+                    "baseline_outputs": [_serialize_output(o) for o in b_outputs],
                     "metrics": {
                         "avg_safety": run.avg_safety,
                         "avg_helpfulness": run.avg_helpfulness,
@@ -139,6 +157,8 @@ async def stream_run(run_id: str):
                         "overall_score": run.overall_score,
                         "category_metrics": run.category_metrics,
                     } if run.status == "completed" else None,
+                    "baseline_metrics": run.baseline_metrics if run.status == "completed" else None,
+                    "baseline_model": run.baseline_model,
                 }
                 yield f"data: {json.dumps(payload)}\n\n"
                 last_completed = run.completed_prompts

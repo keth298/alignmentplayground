@@ -52,7 +52,7 @@ export default function RadarSummaryChart({ metrics, baseline }: RadarSummaryCha
       })}
       {/* Baseline */}
       {baselinePolyline && (
-        <polygon points={baselinePolyline} fill="rgba(99,102,241,0.08)" stroke="#6366f160" strokeWidth="1" strokeDasharray="2 2" />
+        <polygon points={baselinePolyline} fill="rgba(156,163,175,0.12)" stroke="#9ca3af" strokeWidth="1" strokeDasharray="2 2" />
       )}
       {/* Data */}
       <polygon points={polyline} fill="rgba(99,102,241,0.2)" stroke="#6366f1" strokeWidth="1.5" />

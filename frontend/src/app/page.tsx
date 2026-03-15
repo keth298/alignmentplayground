@@ -7,8 +7,9 @@ import { SafetyHelpfulnessScatter, CategoryRadar, RefusalRateBar } from "@/compo
 import OutputsTable from "@/components/outputs/OutputsTable";
 import RunHistory from "@/components/layout/RunHistory";
 import LiveScorePanel, { type Metrics } from "@/components/live-score-panel/LiveScorePanel";
+import SetupScreen from "@/components/setup/SetupScreen";
 import { api } from "@/lib/api";
-import type { Rule, Run, RunOutput, StreamPayload } from "@/lib/types";
+import type { GeneratedPrompt, Rule, Run, RunOutput, StreamPayload } from "@/lib/types";
 
 function buildSystemPrompt(rules: Rule[]): string {
   const active = rules.filter(r => r.enabled);
@@ -95,9 +96,21 @@ function ProgressBar({ completed, total }: { completed: number; total: number })
   );
 }
 
+const GROQ_MODELS = [
+  { value: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+  { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+  { value: "gemma2-9b-it", label: "Gemma 2 9B" },
+  { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
+];
+
 export default function Home() {
+  const [appStep, setAppStep] = useState<"setup" | "playground">("setup");
+  const [modelDescription, setModelDescription] = useState("");
+  const [customPrompts, setCustomPrompts] = useState<GeneratedPrompt[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [benchmarkMode, setBenchmarkMode] = useState<"live" | "full">("live");
+  const [targetModel, setTargetModel] = useState(GROQ_MODELS[0].value);
+  const [baselineModelSel, setBaselineModelSel] = useState<string>("");
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [liveOutputs, setLiveOutputs] = useState<RunOutput[]>([]);
@@ -133,25 +146,59 @@ export default function Home() {
     : scoredOutputs.length > 0 ? buildLiveRun(scoredOutputs, benchmarkMode, liveProgress)
     : selectedRun; // pending, will show "—"
 
-  const runBenchmark = async () => {
-    if (isRunning) return;
+  const handleSetupComplete = useCallback(async (opts: {
+    description: string;
+    targetModel: string;
+    baselineModel: string;
+    generatorModel: string;
+    customPrompts: GeneratedPrompt[];
+  }) => {
+    setModelDescription(opts.description);
+    setTargetModel(opts.targetModel);
+    setBaselineModelSel(opts.baselineModel);
+    setCustomPrompts(opts.customPrompts);
+    setAppStep("playground");
+    // Auto-kick off the run immediately
+    await runBenchmarkWith({
+      targetModel: opts.targetModel,
+      baselineModel: opts.baselineModel,
+      prompts: opts.customPrompts,
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const runBenchmarkWith = async (opts: {
+    targetModel: string;
+    baselineModel: string;
+    prompts: GeneratedPrompt[];
+  }) => {
     setError(null);
     setIsRunning(true);
     setLiveOutputs([]);
-    setLiveProgress({ completed: 0, total: benchmarkStats?.[`${benchmarkMode}_count` as keyof typeof benchmarkStats] ?? 0 });
+    setBaselineOutputs([]);
+    setBaseline(null);
+    setPinnedMetrics(null);
+    setLiveProgress({ completed: 0, total: opts.prompts.length });
 
     try {
-      const { run_id } = await api.createRun({ rules, benchmark_mode: benchmarkMode, judge_mode: "fast" });
+      const { run_id } = await api.createRun({
+        rules,
+        benchmark_mode: benchmarkMode,
+        target_model: opts.targetModel,
+        baseline_model: opts.baselineModel || undefined,
+        judge_mode: "fast",
+        custom_prompts: opts.prompts,
+      });
 
       setSelectedRunId(run_id);
       const newRun: Run = {
         id: run_id, status: "pending", benchmark_mode: benchmarkMode,
-        target_model: "", judge_mode: "fast",
-        total_prompts: benchmarkStats?.[`${benchmarkMode}_count` as keyof typeof benchmarkStats] ?? 0,
+        target_model: opts.targetModel, judge_mode: "fast",
+        total_prompts: opts.prompts.length,
         completed_prompts: 0, created_at: new Date().toISOString(), completed_at: null,
         ruleset: null, avg_safety: null, avg_helpfulness: null,
         avg_refusal_correctness: null, avg_policy_consistency: null, avg_tool_call_accuracy: null,
         refusal_rate: null, false_refusal_rate: null, overall_score: null, category_metrics: null,
+        baseline_model: opts.baselineModel || null, baseline_metrics: null,
       };
       setRuns(prev => [newRun, ...prev]);
 
@@ -162,6 +209,7 @@ export default function Home() {
       es.onmessage = (e) => {
         const payload: StreamPayload = JSON.parse(e.data);
         setLiveOutputs(payload.outputs);
+        if (payload.baseline_outputs?.length) setBaselineOutputs(payload.baseline_outputs);
         setLiveProgress({ completed: payload.completed_prompts, total: payload.total_prompts });
 
         setRuns(prev => prev.map(r => r.id === run_id ? {
@@ -179,7 +227,20 @@ export default function Home() {
             overall_score: payload.metrics.overall_score,
             category_metrics: payload.metrics.category_metrics,
           } : {}),
+          ...(payload.baseline_metrics ? { baseline_metrics: payload.baseline_metrics } : {}),
         } : r));
+
+        if (payload.baseline_metrics) {
+          const bm = payload.baseline_metrics;
+          setPinnedMetrics({
+            safety: (bm.avg_safety ?? 0) / 10,
+            helpfulness: (bm.avg_helpfulness ?? 0) / 10,
+            refusal_rate: bm.refusal_rate ?? 0,
+            false_refusal_rate: bm.false_refusal_rate ?? 0,
+            policy_consistency: (bm.avg_policy_consistency ?? 0) / 10,
+            tool_call_accuracy: (bm.avg_tool_call_accuracy ?? 0) / 10,
+          });
+        }
 
         if (payload.status === "completed" || payload.status === "failed") {
           setIsRunning(false);
@@ -193,11 +254,35 @@ export default function Home() {
     }
   };
 
+  const runBenchmark = async () => {
+    if (isRunning) return;
+    await runBenchmarkWith({ targetModel, baselineModel: baselineModelSel, prompts: customPrompts });
+  };
+
   const handleSelectRun = useCallback(async (id: string) => {
     setSelectedRunId(id);
-    const outputs = await api.getRunOutputs(id).catch(() => []);
+    const [outputs, bOutputs] = await Promise.all([
+      api.getRunOutputs(id).catch(() => []),
+      api.getBaselineOutputs(id).catch(() => []),
+    ]);
     setLiveOutputs(outputs);
-  }, []);
+    setBaselineOutputs(bOutputs);
+    // Restore baseline metrics for the live score panel if this run had a baseline
+    const run = runs.find(r => r.id === id);
+    if (run?.baseline_metrics) {
+      const bm = run.baseline_metrics;
+      setPinnedMetrics({
+        safety: (bm.avg_safety ?? 0) / 10,
+        helpfulness: (bm.avg_helpfulness ?? 0) / 10,
+        refusal_rate: bm.refusal_rate ?? 0,
+        false_refusal_rate: bm.false_refusal_rate ?? 0,
+        policy_consistency: (bm.avg_policy_consistency ?? 0) / 10,
+        tool_call_accuracy: (bm.avg_tool_call_accuracy ?? 0) / 10,
+      });
+    } else {
+      setPinnedMetrics(null);
+    }
+  }, [runs]);
 
   const handleSetBaseline = useCallback(async (run: Run) => {
     setBaseline(run);
@@ -211,6 +296,10 @@ export default function Home() {
 
   const isEmpty = liveOutputs.length === 0;
 
+  if (appStep === "setup") {
+    return <SetupScreen rules={rules} onRun={handleSetupComplete} />;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* ── Header ── */}
@@ -219,14 +308,26 @@ export default function Home() {
         padding: "0 20px", height: 52, background: "var(--bg-base)",
         borderBottom: "1px solid var(--border)", flexShrink: 0, zIndex: 10, gap: 12,
       }}>
-        {/* Left: brand */}
+        {/* Left: brand + back */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button onClick={() => setAppStep("setup")} style={{
+            padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)",
+            background: "transparent", color: "var(--text-faint)", fontSize: 11,
+            fontWeight: 600, cursor: "pointer",
+          }}>
+            ← Setup
+          </button>
           <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
             Alignment Playground
           </span>
           <span style={{ fontSize: 9, color: "var(--text-muted)", background: "var(--border)", padding: "2px 6px", borderRadius: 3, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             v1.0
           </span>
+          {modelDescription && (
+            <span style={{ fontSize: 11, color: "var(--text-faint)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {modelDescription}
+            </span>
+          )}
         </div>
 
         {/* Right: controls */}
@@ -236,9 +337,9 @@ export default function Home() {
               {error}
             </span>
           )}
-          {baseline && !error && (
-            <span style={{ fontSize: 11, color: "#818cf8", background: "#6366f110", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>
-              Baseline active
+          {pinnedMetrics && !error && (
+            <span style={{ fontSize: 11, color: "#9ca3af", background: "#9ca3af15", padding: "3px 8px", borderRadius: 5, flexShrink: 0 }}>
+              ◎ Baseline: {baselineModelSel ? GROQ_MODELS.find(m => m.value === baselineModelSel)?.label ?? baselineModelSel : "pinned"}
             </span>
           )}
 
@@ -250,6 +351,41 @@ export default function Home() {
           }}>
             ⇄ Compare
           </a>
+
+          {/* Model selectors */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 9, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", paddingLeft: 2 }}>Target</span>
+              <select
+                value={targetModel}
+                disabled={isRunning}
+                onChange={e => setTargetModel(e.target.value)}
+                style={{
+                  padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--bg-card)", color: "var(--text-secondary)",
+                  fontSize: 11, fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
+                }}
+              >
+                {GROQ_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 9, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em", paddingLeft: 2 }}>Baseline</span>
+              <select
+                value={baselineModelSel}
+                disabled={isRunning}
+                onChange={e => setBaselineModelSel(e.target.value)}
+                style={{
+                  padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--bg-card)", color: baselineModelSel ? "#9ca3af" : "var(--text-faint)",
+                  fontSize: 11, fontWeight: 600, cursor: isRunning ? "not-allowed" : "pointer",
+                }}
+              >
+                <option value="">None</option>
+                {GROQ_MODELS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+          </div>
 
           {/* Benchmark mode */}
           <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 7, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>

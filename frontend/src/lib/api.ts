@@ -1,4 +1,4 @@
-import type { CompareResult, EdgeCasePrompt, Rule, Run, RunOutput } from "./types";
+import type { CompareResult, EdgeCasePrompt, GeneratedPrompt, Rule, Run, RunOutput } from "./types";
 
 const BASE = "/api";
 
@@ -25,16 +25,25 @@ export const api = {
   getRules: () => get<Rule[]>("/rules/default"),
   getBenchmarkStats: () => get<{ live_count: number; full_count: number; categories: string[]; category_counts: Record<string, number> }>("/benchmarks/stats"),
 
+  generatePrompts: (body: {
+    description: string;
+    rules: Rule[];
+    generator_model?: string;
+  }) => post<{ prompts: GeneratedPrompt[]; count: number }>("/prompts/generate", body),
+
   createRun: (body: {
     rules: Rule[];
     benchmark_mode: string;
     target_model?: string;
+    baseline_model?: string;
     judge_mode: string;
+    custom_prompts?: GeneratedPrompt[];
   }) => post<{ run_id: string; status: string }>("/runs", body),
 
   getRun: (id: string) => get<Run>(`/runs/${id}`),
   listRuns: () => get<Run[]>("/runs"),
   getRunOutputs: (id: string) => get<RunOutput[]>(`/runs/${id}/outputs`),
+  getBaselineOutputs: (id: string) => get<RunOutput[]>(`/runs/${id}/baseline-outputs`),
 
   compare: (run_id_a: string, run_id_b: string) =>
     post<CompareResult>("/compare", { run_id_a, run_id_b }),

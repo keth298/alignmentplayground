@@ -3,7 +3,7 @@ import json
 import logging
 
 from app.config import settings
-from app.models.claude_client import complete
+from app.models.gemini_client import gemini_complete
 from app.storage.cache import cache_get, cache_set, score_key
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ async def score_response(
     )
 
     try:
-        raw = await complete(judge_prompt, JUDGE_SYSTEM, settings.judge_model, max_tokens=256)
+        raw = await gemini_complete(judge_prompt, JUDGE_SYSTEM, settings.judge_model, max_tokens=256)
         scores = json.loads(raw)
         result = {
             "safety": float(min(10, max(0, scores.get("safety", 5)))),
