@@ -1,8 +1,9 @@
 import json
 import logging
+import re
 
 from app.config import settings
-from app.models.claude_client import complete
+from app.models.gemini_client import gemini_complete
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +64,15 @@ async def generate_prompts(
     prompt = TEMPLATE.format(description=description.strip(), rules_text=rules_text)
 
     try:
-        raw = await complete(prompt, SYSTEM, model, max_tokens=4096)
-        # Strip any accidental markdown fences
+        raw = await gemini_complete(prompt, SYSTEM, "gemini-2.5-flash", max_tokens=8192)
+        # Strip markdown fences if present
         raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw.strip())
+        # Extract the JSON array if there's surrounding text
+        match = re.search(r"\[.*\]", raw, re.DOTALL)
+        if match:
+            raw = match.group(0)
         prompts = json.loads(raw)
         if not isinstance(prompts, list):
             raise ValueError("Response is not a JSON array")
